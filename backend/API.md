@@ -8,9 +8,9 @@ Values: walking integer band `0..5`; check boolean; counts nonnegative integer; 
 
 ## Authentication
 
-- `POST /auth/login {studentNumber,password}` → `{user}`. Teacher uses its configured account identifier in studentNumber. Failed attempts are limited to 10 per account and 300 per client address in 15 minutes (429 `RATE_LIMITED`); successful logins do not count. Set `TRUST_PROXY` behind a reverse proxy.
+- `POST /auth/login {studentNumber,password}` → `{user}`. Teacher uses its configured account identifier in studentNumber. A successful account switch revokes the previous account's push binding for this browser device, including after its session expired. Failed attempts are limited to 10 per account and 300 per client address in 15 minutes (429 `RATE_LIMITED`); successful logins do not count. Set `TRUST_PROXY` behind a reverse proxy.
 - `GET /auth/me` → `{user}`. 401 when unauthenticated.
-- `POST /auth/logout {pushEndpoint?}` → `{ok:true}`. The optional current-device endpoint is revoked only when owned by the authenticated account, atomically with its session. Other devices are preserved. The endpoint may be omitted; anonymous logout is also supported.
+- `POST /auth/logout {pushEndpoint?}` → `{ok:true}`. Revokes the browser device identified by its opaque device cookie or its session's saved device binding, atomically with its session. Provider lookup is unnecessary, and other devices are preserved. The optional explicit endpoint is revoked only when owned by the authenticated account. Anonymous or expired-session logout may revoke the device identified by its valid device cookie, but cannot revoke an arbitrary explicit endpoint.
 - `POST /auth/change-password {currentPassword?,newPassword}` → `{user}`. 8–128 characters including English letters and digits, must differ from student number. `currentPassword` is optional only for authenticated first-login temporary-password sessions. First-login accounts can only use auth endpoints until changed.
 - `GET /health` → database readiness only; no account details.
 
@@ -29,8 +29,8 @@ Values: walking integer band `0..5`; check boolean; counts nonnegative integer; 
 - `POST /student/notifications/read-all {}` → `{ok:true}`.
 - `GET /student/settings` → `{weekendReminder,pushEnabled,pushPublicKey}`.
 - `PATCH /student/settings {weekendReminder}` → same settings.
-- `POST /student/push-subscriptions {endpoint,keys:{p256dh,auth}}` → `{ok:true}`.
-- `POST /student/push-subscriptions/status {endpoint}` → `{registered:boolean}`. True only when this exact endpoint belongs to the authenticated student; no other account details are returned. Browser permission alone does not establish account ownership.
+- `POST /student/push-subscriptions {endpoint,keys:{p256dh,auth}}` → `{ok:true}`. Binds the owned subscription to this browser device and authenticated session. An endpoint owned by another account returns 409.
+- `POST /student/push-subscriptions/status {endpoint}` → `{registered:boolean}`. True only when this exact endpoint belongs to the authenticated student; an owned endpoint is also bound to this browser device/session. No other account details are returned. Browser permission alone does not establish account ownership. Both binding endpoints revalidate and lock the current session so requests already in flight cannot restore a binding after logout or account switch.
 - `DELETE /student/push-subscriptions {endpoint}` → `{ok:true}`.
 - `POST /student/records/:date/attachments` multipart field `file` → `{attachment}`. Record must already exist. Images max 3×10MB, video max 1×100MB/60 seconds; same-day start. Numeric record is preserved on upload failure.
 - `DELETE /student/records/:date/attachments/:id` → `{ok:true}`. Same-day only.
@@ -64,5 +64,7 @@ Common filters: `search,grade,classNumber,targetType,participating,achievement` 
 Immediately before each reminder push (including retries), the server rechecks the current Korea date, same-day event identity, participation, weekly completion, daily input and weekend setting. Obsolete reminder pushes become `cancelled`; their in-app event history remains. Correction-result pushes bypass exercise eligibility and may be sent after the program ends.
 
 Before each device send, the server also rechecks subscription identity and ownership so a queued snapshot cannot send to a device already revoked by logout or removal.
+
+Push registration and owned-status checks set `self_fit_push_device` when needed: a random 32-byte, HttpOnly, SameSite=Lax cookie scoped to `/api`, Secure in production, with a one-year lifetime. Only its SHA-256 hash is stored on the subscription and session; no device identifier is exposed in API JSON. The session copy supports logout before a new cookie response reaches the browser. Logout preserves the device cookie for later account switches; a cookie with no registered subscription has no effect.
 
 Initialize schema `npm run db:deploy`, then run `npm run bootstrap-teacher` in a terminal to enter the one real teacher's ID, name and hidden password. `TEACHER_ID`, `TEACHER_NAME`, and `TEACHER_PASSWORD` env or stdin JSON are also supported. Backend reads `backend/.env`. Never pass passwords on CLI args. No seed users or activity are installed.

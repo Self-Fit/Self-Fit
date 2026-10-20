@@ -20,8 +20,11 @@ function browser(t,{endpoint='https://push.example/old',unsubscribeError,unsubsc
   replaceGlobal(t,'navigator',{serviceWorker:{async getRegistration(){return registration;},async register(path){events.push(['register',path]);return registration;},ready:Promise.resolve(registration)}});
   replaceGlobal(t,'window',{PushManager:class{}});
   replaceGlobal(t,'Notification',{async requestPermission(){events.push(['permission']);return 'granted';}});
-  return {events,endpoint:()=>current?.endpoint};
+  return {events,registration,endpoint:()=>current?.endpoint};
 }
+
+function deferred(){let resolve,reject;const promise=new Promise((done,fail)=>{resolve=done;reject=fail;});return {promise,resolve,reject};}
+const nextTurn=()=>new Promise(resolve=>setImmediate(resolve));
 
 function service(browser,{registered=false,statusError,logoutError,registrationError}={}){
   return async(path,options)=>{
@@ -165,4 +168,111 @@ test('a server logout failure preserves normal failure handling and the local su
   await assert.rejects(logoutWithPush(service(state,{logoutError:error})),error);
   assert.equal(state.endpoint(),'https://push.example/old');
   assert.deepEqual(state.events,[['/auth/logout',{pushEndpoint:'https://push.example/old'}]]);
+});
+
+test('logout reaches the server while an optional ownership lookup is still unresolved',async t=>{
+  const state=browser(t),status=deferred();
+  const checking=reconcilePush(()=>status.promise,student);
+  await nextTurn();
+  const loggingOut=logoutWithPush(service(state));
+  await nextTurn();
+  const requested=state.events.some(([path])=>path==='/auth/logout');
+  status.resolve({registered:true});
+  const [enabled]=await Promise.all([checking,loggingOut]);
+  assert.equal(requested,true,'optional ownership lookup must not delay the logout request');
+  assert.equal(enabled,false,'an old ownership response must not enable push after logout');
+});
+
+test('logout bypasses a service worker readiness wait and cancels its later enable work',async t=>{
+  const state=browser(t,{endpoint:null}),ready=deferred();
+  navigator.serviceWorker.ready=ready.promise;
+  const enabling=enablePush(service(state),settings);
+  await nextTurn();
+  const loggingOut=logoutWithPush(service(state));
+  await nextTurn();
+  const requested=state.events.some(([path])=>path==='/auth/logout');
+  ready.resolve(state.registration);
+  const [enabled]=await Promise.all([enabling,loggingOut]);
+  assert.equal(requested,true,'service worker readiness must not delay logout');
+  assert.equal(enabled,false);
+  assert.equal(state.events.some(([kind])=>kind==='subscribe'),false);
+});
+
+test('logout resolves after server revocation even when provider unsubscribe remains pending',async t=>{
+  const state=browser(t),unsubscribed=deferred();
+  const current=await state.registration.pushManager.getSubscription();
+  current.unsubscribe=()=>{state.events.push(['unsubscribe',current.endpoint]);return unsubscribed.promise;};
+  let completed=false;
+  const loggingOut=logoutWithPush(service(state)).then(()=>{completed=true;});
+  await nextTurn();
+  const completedWhileProviderPending=completed;
+  unsubscribed.resolve(true);
+  await loggingOut;
+  assert.equal(completedWhileProviderPending,true,'local unsubscribe must not delay redirect after server logout');
+  assert.deepEqual(state.events,[['/auth/logout',{pushEndpoint:'https://push.example/old'}],['unsubscribe','https://push.example/old']]);
+});
+
+test('permission granted after logout cannot register delivery for the departed account',async t=>{
+  const state=browser(t,{endpoint:null}),permission=deferred();
+  Notification.requestPermission=()=>permission.promise;
+  const enabling=enablePush(service(state),settings);
+  await logoutWithPush(service(state));
+  permission.resolve('granted');
+  assert.equal(await enabling,false);
+  assert.deepEqual(state.events,[['/auth/logout',{}]]);
+});
+
+test('a permission rejection arriving after logout does not surface a stale view error',async t=>{
+  const state=browser(t,{endpoint:null}),permission=deferred();
+  Notification.requestPermission=()=>permission.promise;
+  const enabling=enablePush(service(state),settings);
+  await logoutWithPush(service(state));
+  permission.reject(new Error('permission request canceled'));
+  assert.equal(await enabling,false);
+  assert.deepEqual(state.events,[['/auth/logout',{}]]);
+});
+
+test('a subscription created after logout is cleaned up without server registration',async t=>{
+  const state=browser(t,{endpoint:null}),subscribed=deferred();
+  state.registration.pushManager.subscribe=()=>{state.events.push(['subscribe']);return subscribed.promise;};
+  const enabling=enablePush(service(state),settings);
+  await nextTurn();
+  const loggingOut=logoutWithPush(service(state));
+  await nextTurn();
+  const requested=state.events.some(([path])=>path==='/auth/logout');
+  subscribed.resolve({endpoint:'https://push.example/late',toJSON:()=>({endpoint:'https://push.example/late',keys:{p256dh:'key',auth:'auth'}}),async unsubscribe(){state.events.push(['unsubscribe','https://push.example/late']);return true;}});
+  const [enabled]=await Promise.all([enabling,loggingOut]);
+  assert.equal(requested,true,'a pending browser subscribe request must not delay logout');
+  assert.equal(enabled,false);
+  assert.equal(state.events.some(([path])=>path==='/student/push-subscriptions'),false);
+  assert.deepEqual(state.events.at(-1),['unsubscribe','https://push.example/late']);
+});
+
+test('a failed server logout leaves the current binding usable by a fresh enable request',async t=>{
+  const state=browser(t),status=deferred(),error=new Error('logout unavailable');
+  const checking=reconcilePush(()=>status.promise,student);
+  await nextTurn();
+  let logoutError;
+  const loggingOut=logoutWithPush(service(state,{logoutError:error})).catch(failure=>{logoutError=failure;});
+  await nextTurn();
+  const failedWhileOwnershipPending=logoutError;
+  status.resolve({registered:true});
+  await Promise.all([checking,loggingOut]);
+  assert.equal(failedWhileOwnershipPending,error);
+  assert.equal(state.endpoint(),'https://push.example/old');
+  assert.equal(await enablePush(service(state,{registered:true}),settings),true);
+  assert.equal(state.events.some(([kind])=>kind==='unsubscribe'),false);
+});
+
+test('logout has a bounded browser lookup when the provider never reveals its endpoint',async t=>{
+  const state=browser(t),registration=deferred();
+  navigator.serviceWorker.getRegistration=()=>registration.promise;
+  const loggingOut=logoutWithPush(service(state));
+  let timer;
+  const completed=await Promise.race([loggingOut.then(()=>true),new Promise(resolve=>{timer=setTimeout(()=>resolve(false),1200);})]);
+  clearTimeout(timer);
+  registration.resolve(state.registration);
+  await loggingOut;
+  assert.equal(completed,true,'browser endpoint lookup must not prevent session logout');
+  assert.deepEqual(state.events,[['/auth/logout',{}]]);
 });
