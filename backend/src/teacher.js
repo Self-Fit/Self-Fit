@@ -7,48 +7,47 @@ import { studentFields, rosterRouter } from './roster.js';
 import { summarizeProgram, summarizeWeek,getWeekForDate } from './domain/index.js';
 import { checkValue,checkProspectiveTotals } from './student.js';
 import { exportStudents,exportCorrections } from './export.js';
+import { challengeRouter, challengeDto, loadChallenge } from './challenges.js';
+import { teacherChallenge } from './challenge-context.js';
+import { parseFilters } from './filters.js';
 import { buildParticipation } from './participation.js';
 const correctionInclude={record:{include:{attachments:true}},requester:true,decider:true};
 const duplicateNumber=(error,studentNumber)=>{if(error.code==='P2002') fail(409,'DUPLICATE_NUMBER',`이미 등록된 학번입니다: ${studentNumber}`);throw error;};
-export function parseFilters(query) {
-  const filters={};
-  if(typeof query.search==='string'&&query.search.trim()) filters.search=requiredText(query.search,'검색어',200);
-  for(const key of ['grade','classNumber','week']) if(query[key]!==undefined&&query[key]!=='') {
-    const number=Number(query[key]);
-    if(!Number.isSafeInteger(number)||number<1||number>2147483647||(key==='week'&&number>12)) fail(400,'INVALID_FILTER','검색 조건을 확인해 주세요.');
-    filters[key]=number;
-  }
-  if(query.targetType) {if(!['required','optional'].includes(query.targetType)) fail(400,'INVALID_FILTER','대상 구분을 확인해 주세요.');filters.targetType=query.targetType;}
-  if(query.participating!==undefined&&query.participating!=='') {if(!['true','false'].includes(query.participating)) fail(400,'INVALID_FILTER','참여 필터를 확인해 주세요.');filters.participating=query.participating==='true';}
-  if(query.achievement) {if(!['complete','incomplete','pending'].includes(query.achievement)) fail(400,'INVALID_FILTER','달성 상태를 확인해 주세요.');filters.achievement=query.achievement;}
-  if(query.studentIds) filters.studentIds=requiredText(query.studentIds,'선택 학생',100000).split(',').filter(Boolean);
-  return filters;
-}
-export async function filteredStudents(db,query) {
-  const filters=parseFilters(query);
-  const where={role:'student'};
-  for(const key of ['grade','classNumber','targetType','participating']) if(filters[key]!==undefined) where[key]=filters[key];
+export { parseFilters } from './filters.js';
+export async function filteredStudents(db,query,challenge=null) {
+  const filters=parseFilters(query),where={role:'student'};
+  for(const key of ['grade','classNumber','targetType']) if(filters[key]!==undefined) where[key]=filters[key];
+  if(!challenge && filters.participating!==undefined) where.participating=filters.participating;
   if(filters.search) where.OR=[{name:{contains:filters.search,mode:'insensitive'}},{studentNumber:{contains:filters.search,mode:'insensitive'}}];
   if(filters.studentIds) where.id={in:filters.studentIds};
-  let students=await db.user.findMany({where,include:{records:{...recordsWithAttachments,include:{attachments:true,corrections:{orderBy:{createdAt:'desc'}}}}},orderBy:[{grade:'asc'},{classNumber:'asc'},{studentNumber:'asc'}]});
-  if(filters.achievement) students=students.filter(student=>student.participating&&(filters.week?summarizeWeek(filters.week,student.records):summarizeProgram(student.records)).status===filters.achievement);
+  if(challenge && filters.week && !challenge.weeks.some(week=>week.week===filters.week)) fail(400,'INVALID_FILTER','해당 챌린지의 주차를 선택해 주세요.');
+  let students=await db.user.findMany({where,include:challenge?{
+    memberships:{where:{challengeId:challenge.id}},
+    records:{where:{challengeId:challenge.id},...recordsWithAttachments,include:{attachments:true,corrections:{orderBy:{createdAt:'desc'}}}}
+  }:undefined,orderBy:[{grade:'asc'},{classNumber:'asc'},{studentNumber:'asc'}]});
+  if(challenge) students=students.map(user=>({...user,participating:user.memberships.some(member=>member.status==='active')}));
+  if(challenge && filters.participating!==undefined) students=students.filter(user=>user.participating===filters.participating);
+  if(filters.achievement && challenge) students=students.filter(student=>student.participating&&(filters.week?summarizeWeek(challenge.weeks.find(week=>week.week===filters.week),student.records):summarizeProgram(challenge.weeks,student.records)).status===filters.achievement);
   return {students,filters};
 }
 export function teacherRouter(db) {
   const router=Router();
   router.use('/roster',rosterRouter(db));
+  router.use('/challenges',challengeRouter(db));
   router.get('/overview',async(req,res)=>{
-    const {students,filters}=await filteredStudents(db,req.query);const rows=students.map(studentSummary);
+    const challenge=await teacherChallenge(db,req);
+    const {students,filters}=await filteredStudents(db,req.query,challenge);const rows=students.map(user=>studentSummary(user,challenge));
     const participants=rows.filter(user=>user.participating);
-    res.json({students:rows,program:programDto(),stats:{students:rows.length,participants:participants.length,completed:participants.filter(user=>user.summary.complete===true).length,denominator:participants.length},filters});
+    res.json({students:rows,challenge:challengeDto(challenge,undefined,{detail:false}),program:programDto(challenge),stats:{students:rows.length,participants:participants.length,completed:participants.filter(user=>user.summary.complete===true).length,denominator:participants.length},filters});
   });
   router.get('/participation',async(req,res)=>{
+    const challenge=await teacherChallenge(db,req);
     const filters=parseFilters(Object.fromEntries(['grade','classNumber','targetType']
       .filter(key=>req.query[key]!==undefined).map(key=>[key,req.query[key]])));
     const [students,registeredClasses]=await Promise.all([
       db.user.findMany({
-        where:{role:'student',participating:true,...filters},
-        select:{grade:true,classNumber:true,targetType:true,participating:true,records:{select:{date:true,value:true}}},
+        where:{role:'student',memberships:{some:{challengeId:challenge.id,status:'active'}},...filters},
+        select:{grade:true,classNumber:true,targetType:true,participating:true,records:{where:{challengeId:challenge.id},select:{date:true,value:true}}},
       }),
       db.user.findMany({
         where:{role:'student'},select:{grade:true,classNumber:true},
@@ -61,7 +60,7 @@ export function teacherRouter(db) {
       classes:registeredClasses.filter(row=>validNumber(row.grade)&&validNumber(row.classNumber))
         .map(({grade,classNumber})=>({grade,classNumber})),
     };
-    res.json({...buildParticipation(students),filters,filterOptions});
+    res.json({...buildParticipation(challenge.weeks,students.map(user=>({...user,participating:true}))),challenge:challengeDto(challenge,undefined,{detail:false}),filters,filterOptions});
   });
   router.get('/students',async(req,res)=>res.json({students:(await filteredStudents(db,req.query)).students.map(userDto)}));
   router.post('/students',async(req,res)=>{
@@ -73,8 +72,9 @@ export function teacherRouter(db) {
     const user=await db.user.findFirst({where:{id,role:'student'},...options});if(!user) fail(404,'NOT_FOUND','학생을 찾을 수 없습니다.');return user;
   };
   router.get('/students/:id',async(req,res)=>{
-    const user=await getStudent(req.params.id,{include:{records:{...recordsWithAttachments,include:{attachments:true,revisions:{orderBy:{createdAt:'desc'}},corrections:{where:{status:'approved'}}}},requestedCorrections:{include:correctionInclude,orderBy:{createdAt:'desc'}}}});
-    res.json({user:userDto(user),records:user.records.map(record=>({...recordDto(record),revisions:record.revisions})),summary:summarizeProgram(user.records),corrections:user.requestedCorrections.map(correctionDto)});
+    const challenge=await teacherChallenge(db,req);
+    const user=await getStudent(req.params.id,{include:{memberships:{where:{challengeId:challenge.id}},records:{where:{challengeId:challenge.id},...recordsWithAttachments,include:{attachments:true,revisions:{orderBy:{createdAt:'desc'}},corrections:{where:{status:'approved'}}}},requestedCorrections:{where:{record:{challengeId:challenge.id}},include:correctionInclude,orderBy:{createdAt:'desc'}}}});
+    res.json({challenge:challengeDto(challenge,undefined,{detail:false}),user:userDto({...user,participating:user.memberships.some(member=>member.status==='active')}),records:user.records.map(record=>({...recordDto(record),revisions:record.revisions})),summary:summarizeProgram(challenge.weeks,user.records),corrections:user.requestedCorrections.map(correctionDto)});
   });
   router.patch('/students/:id',async(req,res)=>{
     await getStudent(req.params.id);const fields=studentFields(req.body || {},true);
@@ -96,31 +96,34 @@ export function teacherRouter(db) {
     res.json({temporaryPassword:password});
   });
   router.get('/corrections',async(req,res)=>{
+    const challenge=await teacherChallenge(db,req);
     const status=req.query.status || 'pending';if(!['pending','approved','rejected','all'].includes(status)) fail(400,'INVALID_FILTER','정정 상태를 확인해 주세요.');
-    const rows=await db.correction.findMany({where:status==='all'?{}:{status},include:correctionInclude,orderBy:{createdAt:'desc'}});
-    const records=await db.dailyRecord.findMany({where:{userId:{in:[...new Set(rows.filter(row=>row.status==='pending').map(row=>row.requesterId))]}},select:{id:true,userId:true,date:true,value:true,version:true}});
+    const rows=await db.correction.findMany({where:{record:{challengeId:challenge.id},...(status==='all'?{}:{status})},include:correctionInclude,orderBy:{createdAt:'desc'}});
+    const records=await db.dailyRecord.findMany({where:{challengeId:challenge.id,userId:{in:[...new Set(rows.filter(row=>row.status==='pending').map(row=>row.requesterId))]}},select:{id:true,userId:true,date:true,value:true,version:true}});
     for(const row of rows) {
       const current=records.find(record=>record.id===row.recordId);
       if(row.status!=='pending'||current?.version!==row.baseVersion) continue;
       const studentRecords=records.filter(record=>record.userId===row.requesterId);
-      const week=getWeekForDate(row.record.date);
+      const week=getWeekForDate(challenge.weeks,row.record.date);
       try {row.preview={before:summarizeWeek(week,studentRecords),after:summarizeWeek(week,studentRecords.map(record=>record.id===row.recordId?{...record,value:row.requestedValue}:record))};}
       catch {row.preview=null;}
     }
-    res.json({corrections:rows.map(correctionDto)});
+    res.json({challenge:challengeDto(challenge,undefined,{detail:false}),corrections:rows.map(correctionDto)});
   });
   router.get('/corrections/export',async(req,res)=>{
+    const challenge=await teacherChallenge(db,req);
     const status=req.query.status || 'all';if(!['pending','approved','rejected','all'].includes(status)) fail(400,'INVALID_FILTER','정정 상태를 확인해 주세요.');
-    const rows=await db.correction.findMany({where:status==='all'?{}:{status},include:correctionInclude,orderBy:{createdAt:'desc'}});
-    await exportCorrections(res,rows,status);
+    const rows=await db.correction.findMany({where:{record:{challengeId:challenge.id},...(status==='all'?{}:{status})},include:correctionInclude,orderBy:{createdAt:'desc'}});
+    await exportCorrections(res,rows,status,challenge);
   });
   router.post('/corrections/:id/approve',async(req,res)=>{
     const result=await db.$transaction(async tx=>{
       const correction=await tx.correction.findUnique({where:{id:req.params.id},include:{record:true}});
       if(!correction) fail(404,'NOT_FOUND','정정 요청을 찾을 수 없습니다.');
       if(correction.status!=='pending') fail(409,'ALREADY_DECIDED','이미 처리된 정정 요청입니다.');
-      checkValue(correction.record.date,correction.requestedValue);
-      await checkProspectiveTotals(tx,correction.requesterId,correction.record.date,correction.requestedValue);
+      const challenge=await loadChallenge(tx,correction.record.challengeId);
+      checkValue(challenge,correction.record.date,correction.requestedValue);
+      await checkProspectiveTotals(tx,challenge,correction.requesterId,correction.record.date,correction.requestedValue);
       const updated=await tx.dailyRecord.updateMany({where:{id:correction.recordId,version:correction.baseVersion},data:{value:correction.requestedValue,version:{increment:1}}});
       if(!updated.count) fail(409,'STALE_CORRECTION','요청 이후 원기록이 변경되었습니다. 현재 기록을 확인하고 반려 후 다시 요청해 주세요.');
       await tx.recordRevision.create({data:{recordId:correction.recordId,value:correction.record.value,version:correction.record.version,actorId:req.user.id,source:'correction'}});
@@ -143,6 +146,6 @@ export function teacherRouter(db) {
     });
     res.json({correction:correctionDto(correction)});
   });
-  router.get('/export',async(req,res)=>{const {students,filters}=await filteredStudents(db,req.query);await exportStudents(res,students,filters);});
+  router.get('/export',async(req,res)=>{const challenge=await teacherChallenge(db,req);const {students,filters}=await filteredStudents(db,req.query,challenge);await exportStudents(res,students,filters,challenge);});
   return router;
 }

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { WEEKS, activityDates, summarizeWeek, validateValue } from '../src/domain/index.js';
+import { LEGACY_WEEKS, activityDates, summarizeWeek, validateValue } from '../src/domain/index.js';
 
 // Complete source weeks only. Week 25 contains one day and cannot stand in for a week.
 export const SOURCE_WEEK_OPTIONS = Object.freeze([
@@ -19,7 +19,7 @@ const dateString = value => {
 };
 const weekday = date => (new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7;
 const plusDays = (date, offset) => new Date(Date.parse(`${date}T00:00:00Z`) + offset * 86400000).toISOString().slice(0, 10);
-const sourceDates = week => week <= 12 ? activityDates(week) : Array.from({ length: week === 25 ? 1 : 7 }, (_, index) => plusDays('2026-09-07', (week - 13) * 7 + index));
+const sourceDates = week => week <= 12 ? activityDates(LEGACY_WEEKS, week) : Array.from({ length: week === 25 ? 1 : 7 }, (_, index) => plusDays('2026-09-07', (week - 13) * 7 + index));
 const hash = text => createHash('sha256').update(text).digest('hex');
 
 function normalizeValue(week, value, row) {
@@ -79,7 +79,7 @@ function parseRecords(source, students) {
     assert(!keys.has(key), `날짜별기록 ${index + 1}행 학생·날짜 중복`); keys.add(key);
     assert(sourceDates(sourceWeek).includes(date), `날짜별기록 ${index + 1}행 주차와 활동일 불일치`);
     assert(row[2] === '월화수목금토일'[weekday(date)], `날짜별기록 ${index + 1}행 요일 불일치`);
-    const targetWeek = sourceToTarget.get(sourceWeek), week = WEEKS[targetWeek - 1];
+    const targetWeek = sourceToTarget.get(sourceWeek), week = LEGACY_WEEKS[targetWeek - 1];
     assert(row[4] === week.title, `날짜별기록 ${index + 1}행 운동 불일치`);
     // This original workbook redistribution remains scoped to weeks 1–11.
     // Week 12 is imported separately from its exercise-level source workbook.
@@ -101,7 +101,7 @@ function parseRecords(source, students) {
 }
 
 function optionFor(sourceWeek, targetWeek, rows) {
-  const week = WEEKS[targetWeek - 1];
+  const week = LEGACY_WEEKS[targetWeek - 1];
   const records = rows.filter(row => row.value !== null).map(row => ({ date: plusDays(week.startDate, row.weekday), value: row.value }));
   return { sourceWeek, targetWeek, rows, weekdayCount: rows.filter(row => row.weekday < 5 && row.value !== null).length,
     weekendCount: rows.filter(row => row.weekday >= 5 && row.value !== null).length,
@@ -145,7 +145,7 @@ export function buildParticipationData(source) {
       weekdayDeviation: choice.score[0], selectedWeeks: choice.options.map(option => ({ targetWeek: option.targetWeek, sourceWeek: option.sourceWeek, sourceRows: option.rows.map(row => row.sourceRow) })) });
     for (const option of choice.options) for (const row of option.rows) {
       if (row.value === null) continue;
-      records.push({ studentNumber: student.studentNumber, date: plusDays(WEEKS[option.targetWeek - 1].startDate, row.weekday), value: row.value,
+      records.push({ studentNumber: student.studentNumber, date: plusDays(LEGACY_WEEKS[option.targetWeek - 1].startDate, row.weekday), value: row.value,
         sourceMetadata: { isSynthetic: true, redistribution: 'same-exercise-complete-week-v1', sourceSha256: source.sha256, sourceSheet: '날짜별기록',
           sourceRow: row.sourceRow, sourceDate: row.sourceDate, sourceWeek: row.sourceWeek, targetWeek: option.targetWeek,
           originalValue: row.original[7], dateType: row.original[5], originalCreatedAt: row.original[11], originalUpdatedAt: row.original[12] } });
@@ -159,9 +159,37 @@ export function buildParticipationData(source) {
   for (const item of Object.values(groups)) { item.sourceRate = item.sourceWeekdaySubmissions / item.sourceWeekdayDays; item.targetRate = item.targetWeekdaySubmissions / item.targetWeekdayDays; }
   return { students, records, mapping, summary: {
     sourceFilename: source.filename, sourceSha256: source.sha256, students: students.length, sourceRows: parsed.rowCount, sourceFilledRecords: parsed.filled,
-    targetRecords: records.length, targetActivityDays: 82, redistributedWeeks: 11, unmappedWeeks: [12], deferredWeeks: WEEKS.filter(week => week.deferred).map(week => week.week),
+    targetRecords: records.length, targetActivityDays: 82, redistributedWeeks: 11, unmappedWeeks: [12], deferredWeeks: LEGACY_WEEKS.filter(week => week.deferred).map(week => week.week),
     originalArchiveRequired: true, selectionMethod: 'lexicographic-weekday-completion-weekend',
     exactWeekdayTargets: mapping.filter(item => item.weekdayDeviation === 0).length,
     maxWeekdayDeviation: Math.max(...mapping.map(item => item.weekdayDeviation)), completedWeekRecords: mapping.reduce((sum, item) => sum + item.actual.completedWeeks, 0), groups,
   } };
+}
+
+// Imports only attach to the migrated legacy challenge; never create or select
+// the latest challenge, because archived workbook dates have a fixed meaning.
+export const LEGACY_CHALLENGE_ID = 'challenge-2026-self-fit';
+export async function legacyChallengeId(db) {
+  const challenge = await db.challenge.findUnique({ where: { id: LEGACY_CHALLENGE_ID }, select: { id: true } });
+  assert(challenge, '레거시 챌린지가 없습니다. 먼저 마이그레이션을 적용해 주세요.');
+  return challenge.id;
+}
+
+export async function ensureLegacyMemberships(db, users, { apply = true, requireExisting = false } = {}) {
+  const challengeId = await legacyChallengeId(db);
+  const participants = users.filter(user => user.role === 'student'
+    && (user.targetType === 'required' || (user.targetType === 'optional' && user.participating)));
+  const existing = await db.challengeMembership.findMany({ where: { challengeId, userId: { in: participants.map(user => user.id) } } });
+  for (const membership of existing) {
+    const user = participants.find(item => item.id === membership.userId);
+    assert(membership.status === 'active' && membership.mode === (user.targetType === 'required' ? 'forced' : 'invited'),
+      '레거시 참여 상태가 변경되어 기존 상태를 덮어쓰지 않습니다.');
+  }
+  const found = new Set(existing.map(item => item.userId));
+  const missing = participants.filter(user => !found.has(user.id));
+  assert(!requireExisting || missing.length === 0, '레거시 참여 정보가 누락되어 기존 적재를 검증할 수 없습니다.');
+  if (apply && missing.length) await db.challengeMembership.createMany({ data: missing.map(user => ({
+    challengeId, userId: user.id, mode: user.targetType === 'required' ? 'forced' : 'invited', status: 'active',
+  })) });
+  return challengeId;
 }

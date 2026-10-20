@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { hashPassword, validatePassword, verifyPassword } from '../src/password.js';
-import { buildParticipationData } from './participation-data.js';
+import { buildParticipationData, legacyChallengeId, ensureLegacyMemberships } from './participation-data.js';
 
 // Import is deliberately separate from student date-entry APIs. The supplied
 // historical dummy workbook does not authorize changing the live date or rules.
@@ -56,16 +56,20 @@ async function finish(credentials, datasetId, importedAt, passwordHashesVerified
   },null,2),{mode:0o600});
 }
 try {
+  const challengeId = await legacyChallengeId(db);
   const existing = await db.sourceDataset.findUnique({where:{hash:source.sha256}});
   if (existing) {
     assert.equal(existing.metadataJson.transform, 'same-exercise-week-block-v1', 'Source already exists with a different transformation');
     const rows = await db.studentSource.count({where:{datasetId:existing.id}});
-    const records = await db.dailyRecord.count({where:{sourceDatasetId:existing.id}});
+    const records = await db.dailyRecord.count({where:{challengeId,sourceDatasetId:existing.id}});
     assert.equal(rows, prepared.students.length, 'Existing student import is incomplete');
     assert.equal(records, prepared.records.length, 'Existing record import is incomplete');
     const credentials = JSON.parse(await fs.readFile(credentialPath,'utf8'));
-    const existingUsers = await db.user.findMany({where:{studentNumber:{in:prepared.students.map(s=>s.studentNumber)}},select:{id:true,studentNumber:true}});
-    await db.$transaction(tx=>preserveExactSource(tx,existing.id,new Map(existingUsers.map(u=>[u.studentNumber,u.id]))),{timeout:120000});
+    const existingUsers = await db.user.findMany({where:{studentNumber:{in:prepared.students.map(s=>s.studentNumber)}},select:{id:true,studentNumber:true,role:true,targetType:true,participating:true}});
+    await db.$transaction(async tx=>{
+      await ensureLegacyMemberships(tx, existingUsers);
+      await preserveExactSource(tx,existing.id,new Map(existingUsers.map(u=>[u.studentNumber,u.id])));
+    },{timeout:120000});
     await finish(credentials, existing.id, existing.importedAt, null);
     console.log(JSON.stringify({alreadyImported:true, students:rows, records}));
     process.exitCode=0;
@@ -104,18 +108,19 @@ try {
       await tx.sourceDataset.create({data:{id:datasetId,hash:source.sha256,filename:source.filename,
         metadataJson:{transform:'same-exercise-week-block-v1'}}});
       await tx.user.createMany({data:users});
+      await ensureLegacyMemberships(tx, users);
       await tx.studentSource.createMany({data:prepared.students.map(s=>({id:randomUUID(),datasetId,userId:userIds.get(s.studentNumber),
         rosterJson:[],metadataJson:{sourceSheet:'학생명단',sourceRow:s.sourceRow,
           participation:'synthetic',fitness:'source-marked-actual',historicalRegistrationTime:null}}))});
       await preserveExactSource(tx,datasetId,userIds);
       for(let index=0;index<prepared.records.length;index+=500) {
         await tx.dailyRecord.createMany({data:prepared.records.slice(index,index+500).map(r=>({
-          id:randomUUID(),userId:userIds.get(r.studentNumber),date:r.date,value:r.value,
+          id:randomUUID(),challengeId,userId:userIds.get(r.studentNumber),date:r.date,value:r.value,
           sourceDatasetId:datasetId,sourceMetadata:r.sourceMetadata,createdAt:importedAt,updatedAt:importedAt,
         }))});
       }
       assert.equal(await tx.user.count({where:{id:{in:users.map(u=>u.id)}}}),users.length);
-      assert.equal(await tx.dailyRecord.count({where:{sourceDatasetId:datasetId}}),prepared.records.length);
+      assert.equal(await tx.dailyRecord.count({where:{challengeId,sourceDatasetId:datasetId}}),prepared.records.length);
     }, {timeout:120000});
     const saved = await db.user.findMany({where:{id:{in:users.map(u=>u.id)}}});
     for(const account of credentials.accounts) {

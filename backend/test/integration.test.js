@@ -11,9 +11,11 @@ import { promisify } from 'node:util';
 import { createRequire } from 'node:module';
 import { PrismaClient } from '@prisma/client';
 import ExcelJS from 'exceljs';
+import { runChallengeApiCases } from './challenge-api-cases.js';
 import { createApp } from '../src/app.js';
 import { hashPassword } from '../src/password.js';
 import { createReminderEvents,deliverPendingPush } from '../src/notifications.js';
+const legacyId='challenge-2026-self-fit';
 const run=promisify(execFile);const require=createRequire(import.meta.url);
 const backendDir=fileURLToPath(new URL('../',import.meta.url));
 test('isolated PostgreSQL API integration', {skip:!process.env.TEST_DATABASE_URL,timeout:180000}, async t=>{
@@ -44,6 +46,7 @@ test('isolated PostgreSQL API integration', {skip:!process.env.TEST_DATABASE_URL
     const teacher=await db.user.create({data:{role:'teacher',studentNumber:'test-teacher',name:'TEST ONLY',passwordHash,mustChangePassword:false}});
     const a=await db.user.create({data:{role:'student',studentNumber:'test-001',name:'TEST A',grade:1,classNumber:1,targetType:'required',participating:true,passwordHash,mustChangePassword:false}});
     const b=await db.user.create({data:{role:'student',studentNumber:'test-002',name:'TEST B',grade:1,classNumber:2,targetType:'optional',participating:false,passwordHash,mustChangePassword:false}});
+    await db.challengeMembership.create({data:{challengeId:legacyId,userId:a.id,mode:'forced',status:'active',invitedById:teacher.id}});
     const teacherCookie=(await login(teacher.studentNumber,password)).cookie;
     const aCookie=(await login(a.studentNumber,password)).cookie;
     const bCookie=(await login(b.studentNumber,password)).cookie;
@@ -51,9 +54,9 @@ test('isolated PostgreSQL API integration', {skip:!process.env.TEST_DATABASE_URL
       assert.equal((await request('/teacher/participation')).status,401);
       assert.equal((await request('/teacher/participation',{cookie:aCookie})).status,403);
       const records=await db.dailyRecord.createMany({data:[
-        {userId:a.id,date:'2026-05-25',value:500},
-        {userId:a.id,date:'2026-05-26',value:500},
-        {userId:b.id,date:'2026-05-25',value:1000},
+        {challengeId:legacyId,userId:a.id,date:'2026-05-25',value:500},
+        {challengeId:legacyId,userId:a.id,date:'2026-05-26',value:500},
+        {challengeId:legacyId,userId:b.id,date:'2026-05-25',value:1000},
       ]});
       assert.equal(records.count,3);
       try {
@@ -97,7 +100,7 @@ test('isolated PostgreSQL API integration', {skip:!process.env.TEST_DATABASE_URL
     await t.test('dumbbell input, partial blanks, corrections, analytics, and detailed export stay consistent',async()=>{
       const completed={D12_CURL:2,D12_SQUAT:2,D12_ROW:2};
       const partial={D12_CURL:3,D12_SQUAT:0,D12_ROW:null};
-      await db.dailyRecord.createMany({data:['2026-08-31','2026-09-01'].map(date=>({userId:a.id,date,value:completed}))});
+      await db.dailyRecord.createMany({data:['2026-08-31','2026-09-01'].map(date=>({challengeId:legacyId,userId:a.id,date,value:completed}))});
       t.mock.timers.enable({apis:['Date'],now:new Date('2026-09-02T01:00:00Z')});
       try {
         assert.equal((await request('/program',{cookie:aCookie})).data.week12Pending,false);
@@ -130,10 +133,10 @@ test('isolated PostgreSQL API integration', {skip:!process.env.TEST_DATABASE_URL
       } finally {
         t.mock.timers.reset();
         await db.notification.deleteMany({where:{userId:a.id,type:'correction'}});
-        const where={record:{userId:a.id,date:{gte:'2026-08-31',lte:'2026-09-04'}}};
+        const where={record:{challengeId:legacyId,userId:a.id,date:{gte:'2026-08-31',lte:'2026-09-04'}}};
         await db.correction.deleteMany({where});
         await db.recordRevision.deleteMany({where});
-        await db.dailyRecord.deleteMany({where:{userId:a.id,date:{gte:'2026-08-31',lte:'2026-09-04'}}});
+        await db.dailyRecord.deleteMany({where:{challengeId:legacyId,userId:a.id,date:{gte:'2026-08-31',lte:'2026-09-04'}}});
       }
     });
     await t.test('password reset racing with an in-flight old-password login cannot mint a session',async()=>{
@@ -148,7 +151,7 @@ test('isolated PostgreSQL API integration', {skip:!process.env.TEST_DATABASE_URL
       } finally {release();loginReadHook=null;await db.user.delete({where:{id:raceUser.id}});}
     });
     await t.test('correction preserves current value, owner isolation, approval audit, notification dedupe',async()=>{
-      const record=await db.dailyRecord.create({data:{userId:a.id,date:'2026-06-08',value:100}});
+      const record=await db.dailyRecord.create({data:{challengeId:legacyId,userId:a.id,date:'2026-06-08',value:100}});
       const pending=await request('/student/records/2026-06-08/corrections',{cookie:aCookie,method:'POST',body:{value:250,version:1,reason:'입력 오류'}});
       assert.equal(pending.status,201);assert.equal((await db.dailyRecord.findUnique({where:{id:record.id}})).value,100);
       const preview=(await request('/teacher/corrections',{cookie:teacherCookie})).data.corrections[0].preview;
@@ -164,13 +167,13 @@ test('isolated PostgreSQL API integration', {skip:!process.env.TEST_DATABASE_URL
     await t.test('stale approval is atomic; rejection requires reason',async()=>{
       const pending=await request('/student/records/2026-06-08/corrections',{cookie:aCookie,method:'POST',body:{value:300,version:2,reason:'수정'}});
       const id=pending.data.correction.id;
-      await db.dailyRecord.update({where:{userId_date:{userId:a.id,date:'2026-06-08'}},data:{value:275,version:{increment:1}}});
+      await db.dailyRecord.update({where:{challengeId_userId_date:{challengeId:legacyId,userId:a.id,date:'2026-06-08'}},data:{value:275,version:{increment:1}}});
       assert.equal((await request(`/teacher/corrections/${id}/approve`,{cookie:teacherCookie,method:'POST',body:{}})).status,409);
       assert.equal((await db.correction.findUnique({where:{id}})).status,'pending');
       assert.equal((await request('/teacher/corrections',{cookie:teacherCookie})).data.corrections[0].preview,null);
       assert.equal((await request(`/teacher/corrections/${id}/reject`,{cookie:teacherCookie,method:'POST',body:{reason:''}})).status,400);
       assert.equal((await request(`/teacher/corrections/${id}/reject`,{cookie:teacherCookie,method:'POST',body:{reason:'현재 기록 확인 필요'}})).status,200);
-      assert.equal((await db.dailyRecord.findUnique({where:{userId_date:{userId:a.id,date:'2026-06-08'}}})).value,275);
+      assert.equal((await db.dailyRecord.findUnique({where:{challengeId_userId_date:{challengeId:legacyId,userId:a.id,date:'2026-06-08'}}})).value,275);
     });
     await t.test('roster validation and one-time commit, temp password change, reset revokes sessions',async()=>{
       const workbook=new ExcelJS.Workbook();const sheet=workbook.addWorksheet('명단');sheet.addRow(['학번','이름','학년','반','대상구분']);sheet.addRow(['test-003','TEST C',2,3,'선택']);
@@ -233,7 +236,7 @@ test('isolated PostgreSQL API integration', {skip:!process.env.TEST_DATABASE_URL
       transactionHook=async(...args)=>{if(!changed){changed=true;t.mock.timers.setTime(new Date('2026-05-19T15:00:00Z').getTime());}return original(...args);};
       try {
         assert.equal((await request('/student/records/2026-05-19',{cookie:aCookie,method:'PUT',body:{value:true,version:2}})).status,403);
-        assert.equal((await db.dailyRecord.findUnique({where:{userId_date:{userId:a.id,date:'2026-05-19'}}})).value,false);
+        assert.equal((await db.dailyRecord.findUnique({where:{challengeId_userId_date:{challengeId:legacyId,userId:a.id,date:'2026-05-19'}}})).value,false);
       } finally {transactionHook=null;t.mock.timers.reset();}
       t.mock.timers.enable({apis:['Date'],now:new Date('2026-05-20T14:59:59Z')});
       try {
@@ -266,25 +269,26 @@ test('isolated PostgreSQL API integration', {skip:!process.env.TEST_DATABASE_URL
     });
     await t.test('push dispatch rechecks stale dates, completed goals and excluded days without blocking correction results',async()=>{
       const user=await db.user.create({data:{role:'student',studentNumber:'test-notification-only',name:'TEST NOTIFICATION',grade:1,classNumber:1,targetType:'required',participating:true,passwordHash,mustChangePassword:false}});
+      await db.challengeMembership.create({data:{challengeId:legacyId,userId:user.id,mode:'forced',status:'active',invitedById:teacher.id}});
       await db.pushSubscription.create({data:{userId:user.id,endpoint:'https://fcm.googleapis.com/test-only-no-network',p256dh:'test-only',auth:'test-only'}});
       t.mock.timers.enable({apis:['Date'],now:new Date('2026-06-09T11:00:00Z')});
       const sent=[];
       const transport=async(subscription,payload)=>{const message=JSON.parse(payload);sent.push(message.id);if(message.title==='retry-test') throw new Error('test-only transient failure');return {statusCode:201};};
-      const event=async(date,title='reminder-test')=>db.notification.create({data:{userId:user.id,eventKey:`reminder:${user.id}:${date}`,type:'reminder',title,body:'test-only',nextTryAt:new Date()}});
+      const event=async(date,title='reminder-test')=>db.notification.create({data:{userId:user.id,eventKey:`reminder:${legacyId}:${user.id}:${date}`,type:'reminder',title,body:'test-only',nextTryAt:new Date()}});
       const state=async id=>(await db.notification.findUnique({where:{id}})).pushState;
       try {
-        await db.dailyRecord.create({data:{userId:user.id,date:'2026-06-08',value:100}});
+        await db.dailyRecord.create({data:{challengeId:legacyId,userId:user.id,date:'2026-06-08',value:100}});
         const stale=await event('2026-06-08');const retry=await event('2026-06-09','retry-test');
         await deliverPendingPush(db,transport);
         assert.equal(await state(stale.id),'cancelled');assert.equal(await state(retry.id),'retry');assert.equal(sent.filter(id=>id===retry.id).length,1);
-        await db.dailyRecord.create({data:{userId:user.id,date:'2026-06-09',value:400}});
+        await db.dailyRecord.create({data:{challengeId:legacyId,userId:user.id,date:'2026-06-09',value:400}});
         t.mock.timers.setTime(new Date('2026-06-09T11:02:00Z').getTime());
         await deliverPendingPush(db,transport);
         assert.equal(await state(retry.id),'cancelled');assert.equal(sent.filter(id=>id===retry.id).length,1);
         assert.ok(await db.notification.findUnique({where:{id:retry.id}}),'cancellation preserves the in-app event');
 
         t.mock.timers.setTime(new Date('2026-05-19T11:00:00Z').getTime());
-        await db.dailyRecord.create({data:{userId:user.id,date:'2026-05-19',value:true}});
+        await db.dailyRecord.create({data:{challengeId:legacyId,userId:user.id,date:'2026-05-19',value:true}});
         const dailyMet=await event('2026-05-19');await deliverPendingPush(db,transport);
         assert.equal(await state(dailyMet.id),'cancelled');assert.ok(!sent.includes(dailyMet.id));
 
@@ -306,6 +310,7 @@ test('isolated PostgreSQL API integration', {skip:!process.env.TEST_DATABASE_URL
         t.mock.timers.reset();await db.dailyRecord.deleteMany({where:{userId:user.id}});await db.user.delete({where:{id:user.id}});
       }
     });
+    await runChallengeApiCases(t,{db,request,teacherCookie,a,b,aCookie,bCookie,origin,temp});
   } finally {
     if(server) await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});
     const cleanup=[];

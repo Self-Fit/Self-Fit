@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { LEGACY_CHALLENGE_ID } from './participation-data.js';
 const directory = path.resolve(process.argv[2]);
 const credentials = JSON.parse(await fs.readFile(path.join(directory,'accounts.private.json'),'utf8'));
 const result = JSON.parse(await fs.readFile(path.join(directory,'import-result.json'),'utf8'));
@@ -17,7 +18,7 @@ const login=await request('/auth/login',{body:{studentNumber:teacher.studentNumb
 assert.equal(login.status,200);assert.equal(login.body.user.name,'서승범');assert.equal(login.body.user.mustChangePassword,false);
 try {
   const start=performance.now();
-  const overview=await request('/teacher/overview',{cookie:login.cookie});
+  const overview=await request(`/teacher/overview?challengeId=${LEGACY_CHALLENGE_ID}`,{cookie:login.cookie});
   const overviewMilliseconds=Math.round(performance.now()-start);
   assert.equal(overview.status,200);assert.equal(overview.body.students.length,194);
   assert.equal(overview.body.stats.participants,194);assert.equal(overview.body.program.weeks.length,12);
@@ -28,7 +29,7 @@ try {
   const representatives=[];
   for(const studentNumber of ['30111','10101','30406']) {
     const student=overview.body.students.find(s=>s.studentNumber===studentNumber);
-    const detail=await request(`/teacher/students/${student.id}`,{cookie:login.cookie});
+    const detail=await request(`/teacher/students/${student.id}?challengeId=${LEGACY_CHALLENGE_ID}`,{cookie:login.cookie});
     assert.equal(detail.status,200);assert.equal(detail.body.records.length,student.records.length);
     const account=credentials.accounts.find(a=>a.studentNumber===studentNumber);
     const signed=await request('/auth/login',{body:{studentNumber,password:account.password}});
@@ -38,7 +39,7 @@ try {
     await request('/auth/logout',{cookie:signed.cookie,body:{}});
     representatives.push({studentNumber,name:student.name,targetType:student.targetType,records:student.records.length,completedWeeks:student.summary.completedWeeks});
   }
-  const exported=await request('/teacher/export',{cookie:login.cookie,raw:true});
+  const exported=await request(`/teacher/export?challengeId=${LEGACY_CHALLENGE_ID}`,{cookie:login.cookie,raw:true});
   assert.equal(exported.status,200);assert.equal(exported.body.subarray(0,2).toString(),'PK');
   await fs.writeFile(path.join(directory,'service-export.xlsx'),exported.body,{mode:0o600});
   const report={students:194,accounts:195,records:result.records,teacherLogin:true,studentLogins:3,

@@ -1,4 +1,4 @@
-import { WEEKS, activityDates, validateValue, summarizeWeek } from '../src/domain/index.js';
+import { LEGACY_WEEKS, activityDates, validateValue, summarizeWeek } from '../src/domain/index.js';
 
 export const DUMBBELL_TRANSFORM = 'week12-dumbbell-sets-v1';
 const ids = ['D12_CURL', 'D12_SQUAT', 'D12_ROW'];
@@ -26,7 +26,7 @@ function rowsAfter(source, sheet, start) {
 /** Read-only conversion. Source formulas are archived, never executed. */
 export function buildDumbbellData(source) {
   check(source && /^[a-f0-9]{64}$/.test(source.sha256 ?? '') && typeof source.filename === 'string' && source.filename, '원본 파일명과 SHA-256이 필요합니다.');
-  const week = WEEKS.find(item => item.week === 12), dates = activityDates(12);
+  const week = LEGACY_WEEKS.find(item => item.week === 12), dates = activityDates(LEGACY_WEEKS, 12);
   check(!week.deferred && week.weeklyTarget === 3, '승인된 12주차 도메인 규칙이 준비되지 않았습니다.');
   for (const [sheet, columns] of Object.entries(headers)) {
     check(Array.isArray(source.sheets?.[sheet]), `${sheet} 시트 누락`);

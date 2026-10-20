@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import { buildRevisedParticipationData, REVISED_PARTICIPATION_TRANSFORM } from './revised-participation-data.js';
+import { legacyChallengeId, ensureLegacyMemberships } from './participation-data.js';
 
 const PREVIOUS_TRANSFORMS = new Set(['same-exercise-week-block-v1', 'week12-dumbbell-sets-v1']);
 const sha256 = text => createHash('sha256').update(text).digest('hex');
@@ -21,8 +22,12 @@ const sourceRows = (prepared, ids) => prepared.students.map(student => ({
 
 // PostgreSQL constructs and serializes the archive so existing JSON numbers and timestamps
 // never pass through Prisma's JSON encoder or a parse/stringify conversion.
-async function recordSnapshot(tx) {
-  const [result] = await tx.$queryRaw`SELECT COALESCE(jsonb_agg(to_jsonb(r) ORDER BY r."id"), '[]'::jsonb)::text AS "text" FROM "DailyRecord" r`;
+async function recordSnapshot(tx, challengeId, legacyShape = false) {
+  // Pre-challenge revision archives are immutable. Excluding only the newly
+  // backfilled column reproduces their exact PostgreSQL JSONB fingerprint.
+  const omit = legacyShape ? 'challengeId' : '__no_snapshot_column__';
+  const [result] = await tx.$queryRaw`SELECT COALESCE(jsonb_agg(to_jsonb(r) - ${omit} ORDER BY r."id"), '[]'::jsonb)::text AS "text"
+    FROM "DailyRecord" r WHERE r."challengeId" = ${challengeId}`;
   return result.text;
 }
 async function previousSources(tx) {
@@ -50,16 +55,16 @@ async function verifyStudentSources(tx, datasetId, expectedRows) {
   assert.equal(result.mismatches, 0, 'Student source archive differs; no data will be overwritten');
   assert.equal(await tx.studentSource.count({ where: { datasetId } }), expectedRows.length, 'Unexpected student source row count');
 }
-async function verifyRecords(tx, datasetId, expected) {
+async function verifyRecords(tx, datasetId, expected, challengeId) {
   const [result] = await tx.$queryRaw`WITH expected AS (SELECT value AS row FROM jsonb_array_elements(${JSON.stringify(expected)}::jsonb))
     SELECT count(*)::int AS "expected", count(*) FILTER (WHERE r."id" IS NULL OR r."sourceDatasetId" IS DISTINCT FROM ${datasetId}
       OR r."value" IS DISTINCT FROM e.row->'value' OR r."sourceMetadata" IS DISTINCT FROM e.row->'sourceMetadata')::int AS "mismatches"
-    FROM expected e LEFT JOIN "DailyRecord" r ON r."userId" = e.row->>'userId' AND r."date" = e.row->>'date'`;
+    FROM expected e LEFT JOIN "DailyRecord" r ON r."challengeId" = ${challengeId} AND r."userId" = e.row->>'userId' AND r."date" = e.row->>'date'`;
   assert.equal(result.expected, expected.length, 'Record verification count differs');
   assert.equal(result.mismatches, 0, 'Current records differ from the revision; no data will be overwritten');
-  assert.equal(await tx.dailyRecord.count(), expected.length, 'Unexpected current record count');
+  assert.equal(await tx.dailyRecord.count({ where: { challengeId } }), expected.length, 'Unexpected current record count');
 }
-async function verifySaved(tx, datasetId, source, prepared, expected, rows) {
+async function verifySaved(tx, datasetId, source, prepared, expected, rows, challengeId) {
   const [saved] = await tx.$queryRaw`SELECT "filename" = ${source.filename} AS "filenameExact",
       ("metadataJson" - 'revision') = ${JSON.stringify(baseMetadata(source, prepared))}::jsonb AS "sourceExact",
       (("metadataJson"->'revision') - 'previousRecords')::text AS "revision",
@@ -71,8 +76,8 @@ async function verifySaved(tx, datasetId, source, prepared, expected, rows) {
   assert.equal(sha256(saved.before), revision.previousRecordsSha256, 'Previous record archive fingerprint differs');
   assert.deepEqual((await delta(tx, saved.before, expected)).counts, revision.operations, 'Revision operation archive differs');
   await verifyStudentSources(tx, datasetId, rows);
-  await verifyRecords(tx, datasetId, expected);
-  assert.equal(sha256(await recordSnapshot(tx)), revision.afterRecordsSha256, 'Records were modified after the revision; no data will be overwritten');
+  await verifyRecords(tx, datasetId, expected, challengeId);
+  assert.equal(sha256(await recordSnapshot(tx, challengeId, revision.recordSnapshotVersion === undefined)), revision.afterRecordsSha256, 'Records were modified after the revision; no data will be overwritten');
   return { sourceArchiveExact: true, previousRecordsArchiveExact: true, studentSourceRowsExact: true, recordValuesAndProvenanceExact: true, operations: revision.operations };
 }
 
@@ -96,8 +101,9 @@ export async function importRevisedParticipationData(db, source, { apply = false
       // Lock before reading: no concurrent account, date, correction, or attachment
       // insertion can slip between validation and replacement. Readers remain allowed.
       await tx.$executeRawUnsafe('LOCK TABLE "User", "Session" IN SHARE MODE');
-      await tx.$executeRawUnsafe('LOCK TABLE "DailyRecord", "RecordRevision", "Correction", "Attachment", "SourceDataset", "StudentSource" IN SHARE ROW EXCLUSIVE MODE');
+      await tx.$executeRawUnsafe('LOCK TABLE "DailyRecord", "RecordRevision", "Correction", "Attachment", "SourceDataset", "StudentSource", "ChallengeMembership" IN SHARE ROW EXCLUSIVE MODE');
     }
+    const challengeId = await legacyChallengeId(tx);
     const users = await tx.user.findMany({ where: { role: 'student' },
       select: { id: true, studentNumber: true, name: true, grade: true, classNumber: true, targetType: true, participating: true } });
     assert.equal(users.length, prepared.students.length, 'The complete database student roster differs; no accounts will be created or changed');
@@ -108,22 +114,27 @@ export async function importRevisedParticipationData(db, source, { apply = false
         && user.targetType === student.targetType && user.participating === student.participating,
       'Existing student identity or participation differs from the workbook');
     }
+    await ensureLegacyMemberships(tx, users.map(user => ({ ...user, role: 'student' })), { apply: false });
     const ids = new Map(users.map(user => [user.studentNumber, user.id]));
-    const expected = prepared.records.map(record => ({ userId: ids.get(record.studentNumber), date: record.date, value: record.value, sourceMetadata: record.sourceMetadata }));
+    const expected = prepared.records.map(record => ({ challengeId, userId: ids.get(record.studentNumber), date: record.date, value: record.value, sourceMetadata: record.sourceMetadata }));
     const rows = sourceRows(prepared, ids), mode = apply ? 'apply' : 'dry-run';
     const existing = await tx.sourceDataset.findUnique({ where: { hash: source.sha256 }, select: { id: true } });
-    if (existing) return { mode, alreadyImported: true, changed: false, datasetId: existing.id, ...prepared.summary,
-      ...await verifySaved(tx, existing.id, source, prepared, expected, rows) };
+    if (existing) {
+      await ensureLegacyMemberships(tx, users.map(user => ({ ...user, role: 'student' })), { apply: false, requireExisting: true });
+      return { mode, alreadyImported: true, changed: false, datasetId: existing.id, ...prepared.summary,
+        ...await verifySaved(tx, existing.id, source, prepared, expected, rows, challengeId) };
+    }
 
-    const beforeText = await recordSnapshot(tx), before = JSON.parse(beforeText), sources = await previousSources(tx);
+    const beforeText = await recordSnapshot(tx, challengeId), before = JSON.parse(beforeText), sources = await previousSources(tx);
     assert(before.length > 0, 'No prior imported records exist; this script only revises an existing import');
     const knownSources = new Set(sources.filter(item => PREVIOUS_TRANSFORMS.has(item.transform)).map(item => item.id));
     const studentIds = new Set(users.map(user => user.id)), dates = new Set(prepared.summary.dates);
     assert(before.every(record => studentIds.has(record.userId) && dates.has(record.date)), 'Records outside this roster or the approved twelve weeks exist');
     assert(before.every(record => knownSources.has(record.sourceDatasetId) && record.sourceMetadata !== null), 'An existing record has an unrecognized import source');
     assert(before.every(record => record.version === 1 && record.createdAt === record.updatedAt), 'An existing record was edited; revision stopped without overwriting it');
-    const [relations] = await tx.$queryRaw`SELECT (SELECT count(*)::int FROM "Correction") AS "corrections",
-      (SELECT count(*)::int FROM "RecordRevision") AS "revisions", (SELECT count(*)::int FROM "Attachment") AS "attachments"`;
+    const [relations] = await tx.$queryRaw`SELECT (SELECT count(*)::int FROM "Correction" x JOIN "DailyRecord" r ON r."id" = x."recordId" WHERE r."challengeId" = ${challengeId}) AS "corrections",
+      (SELECT count(*)::int FROM "RecordRevision" x JOIN "DailyRecord" r ON r."id" = x."recordId" WHERE r."challengeId" = ${challengeId}) AS "revisions",
+      (SELECT count(*)::int FROM "Attachment" x JOIN "DailyRecord" r ON r."id" = x."recordId" WHERE r."challengeId" = ${challengeId}) AS "attachments"`;
     assert.deepEqual(relations, { corrections: 0, revisions: 0, attachments: 0 }, 'Corrections, revisions, or attachments exist; revision stopped without deleting them');
     await checkBackupState(tx, backup, before, sources);
     const operations = await delta(tx, beforeText, expected);
@@ -132,9 +143,10 @@ export async function importRevisedParticipationData(db, source, { apply = false
       accountsCreated: 0, passwordsChanged: 0, sessionsChanged: 0, previousSourceRowsChanged: 0 };
     if (!apply) return { ...plan, changed: false, readyToApply: true };
 
+    await ensureLegacyMemberships(tx, users.map(user => ({ ...user, role: 'student' })));
     const datasetId = randomUUID(), importedAt = new Date();
     const metadata = { ...baseMetadata(source, prepared), revision: {
-      previousSources: sources, previousRecordsSha256: sha256(beforeText), operations: operations.counts, appliedAt: importedAt.toISOString(),
+      recordSnapshotVersion: 2, previousSources: sources, previousRecordsSha256: sha256(beforeText), operations: operations.counts, appliedAt: importedAt.toISOString(),
     } };
     await tx.$executeRaw`INSERT INTO "SourceDataset" ("id", "hash", "filename", "metadataJson", "importedAt")
       VALUES (${datasetId}, ${source.sha256}, ${source.filename},
@@ -149,17 +161,17 @@ export async function importRevisedParticipationData(db, source, { apply = false
     }
     for (let offset = 0; offset < expected.length; offset += 500) {
       const batch = expected.slice(offset, offset + 500).map(record => ({ id: randomUUID(), ...record }));
-      await tx.$executeRaw`INSERT INTO "DailyRecord" ("id", "userId", "date", "value", "version", "createdAt", "updatedAt", "sourceDatasetId", "sourceMetadata")
-        SELECT row->>'id', row->>'userId', row->>'date', row->'value', 1, ${importedAt}, ${importedAt}, ${datasetId}, row->'sourceMetadata'
+      await tx.$executeRaw`INSERT INTO "DailyRecord" ("id", "challengeId", "userId", "date", "value", "version", "createdAt", "updatedAt", "sourceDatasetId", "sourceMetadata")
+        SELECT row->>'id', ${challengeId}, row->>'userId', row->>'date', row->'value', 1, ${importedAt}, ${importedAt}, ${datasetId}, row->'sourceMetadata'
         FROM jsonb_array_elements(${JSON.stringify(batch)}::jsonb) AS source(row)
-        ON CONFLICT ("userId", "date") DO UPDATE SET "value" = EXCLUDED."value", "sourceDatasetId" = EXCLUDED."sourceDatasetId",
+        ON CONFLICT ("challengeId", "userId", "date") DO UPDATE SET "value" = EXCLUDED."value", "sourceDatasetId" = EXCLUDED."sourceDatasetId",
           "sourceMetadata" = EXCLUDED."sourceMetadata",
           "version" = CASE WHEN "DailyRecord"."value" IS DISTINCT FROM EXCLUDED."value" THEN "DailyRecord"."version" + 1 ELSE "DailyRecord"."version" END,
           "updatedAt" = CASE WHEN "DailyRecord"."value" IS DISTINCT FROM EXCLUDED."value" THEN EXCLUDED."updatedAt" ELSE "DailyRecord"."updatedAt" END`;
     }
-    const afterHash = sha256(await recordSnapshot(tx));
+    const afterHash = sha256(await recordSnapshot(tx, challengeId));
     await tx.$executeRaw`UPDATE "SourceDataset" SET "metadataJson" = jsonb_set("metadataJson", '{revision,afterRecordsSha256}', to_jsonb(${afterHash}::text)) WHERE "id" = ${datasetId}`;
-    const verification = await verifySaved(tx, datasetId, source, prepared, expected, rows);
+    const verification = await verifySaved(tx, datasetId, source, prepared, expected, rows, challengeId);
     return { ...plan, changed: true, datasetId, importedAt: importedAt.toISOString(), ...verification };
   }, { isolationLevel: apply ? 'Serializable' : 'RepeatableRead', timeout: 120000, maxWait: 10000 });
 }

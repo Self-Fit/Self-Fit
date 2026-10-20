@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import { buildDumbbellData } from '../scripts/dumbbell-data.js';
+import { LEGACY_CHALLENGE_ID } from '../scripts/participation-data.js';
 import { importDumbbellData } from '../scripts/import-dumbbell-data.js';
 
 const dates = ['2026-08-31', '2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04'];
@@ -124,7 +125,7 @@ test('isolated PostgreSQL import is atomic, exact, conflict-safe and idempotent'
     const source = fixture(undefined, 194), prepared = buildDumbbellData(source);
     await db.user.createMany({ data: prepared.students.map(student => ({ role: 'student', studentNumber: student.studentNumber, name: student.name, grade: student.grade, classNumber: student.classNumber, participating: true, targetType: 'required', passwordHash: 'TEST-ONLY-NOT-A-LOGIN-HASH' })) });
     const user = await db.user.findUnique({ where: { studentNumber: '10101' } });
-    const original = await db.dailyRecord.create({ data: { userId: user.id, date: '2026-05-25', value: 321 } });
+    const original = await db.dailyRecord.create({ data: { challengeId: LEGACY_CHALLENGE_ID, userId: user.id, date: '2026-05-25', value: 321 } });
     const prior = await db.sourceDataset.create({ data: { hash: 'b'.repeat(64), filename: 'TEST-PRIOR', metadataJson: { retained: true } } });
     await db.studentSource.create({ data: { datasetId: prior.id, userId: user.id, rosterJson: ['TEST PRIOR'], fitnessJson: { semester1: { score: 30, grade: 3 } } } });
     const snapshot = async () => createHash('sha256').update(JSON.stringify(await db.user.findMany({ orderBy: { studentNumber: 'asc' } }))).digest('hex');
@@ -132,7 +133,8 @@ test('isolated PostgreSQL import is atomic, exact, conflict-safe and idempotent'
     const dryRun = await importDumbbellData(db, source);
     assert.equal(dryRun.changed, false); assert.equal(dryRun.readyToApply, true);
     assert.equal(await db.sourceDataset.count(), 1); assert.equal(await db.dailyRecord.count(), 1);
-    const conflict = await db.dailyRecord.create({ data: { userId: user.id, date: dates[0], value: { D12_CURL: 0, D12_SQUAT: null, D12_ROW: null } } });
+    assert.equal(await db.challengeMembership.count(), 0, 'Read-only preview cannot enroll students');
+    const conflict = await db.dailyRecord.create({ data: { challengeId: LEGACY_CHALLENGE_ID, userId: user.id, date: dates[0], value: { D12_CURL: 0, D12_SQUAT: null, D12_ROW: null } } });
     await assert.rejects(importDumbbellData(db, source, { apply: true }), /already contains records/);
     assert.equal(await db.sourceDataset.count(), 1);
     await db.dailyRecord.delete({ where: { id: conflict.id } });
@@ -148,6 +150,8 @@ test('isolated PostgreSQL import is atomic, exact, conflict-safe and idempotent'
     assert.equal(await db.sourceDataset.count(), 1); assert.equal(await db.studentSource.count(), 1); assert.equal(await db.dailyRecord.count(), 1);
     const applied = await importDumbbellData(db, source, { apply: true });
     assert.equal(applied.changed, true); assert.equal(applied.sourceArchiveExact, true);
+    assert.equal(await db.challengeMembership.count({ where: { challengeId: LEGACY_CHALLENGE_ID, status: 'active', mode: 'forced' } }), 194);
+    assert.equal(await db.dailyRecord.count({ where: { sourceDatasetId: applied.datasetId, challengeId: LEGACY_CHALLENGE_ID } }), prepared.records.length);
     assert.equal(await db.dailyRecord.count(), 1 + prepared.records.length);
     const again = await importDumbbellData(db, source, { apply: true });
     assert.equal(again.alreadyImported, true); assert.equal(again.changed, false);

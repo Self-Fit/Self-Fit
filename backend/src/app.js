@@ -8,6 +8,8 @@ import { studentRouter } from './student.js';
 import { teacherRouter } from './teacher.js';
 import { attachmentRouters } from './attachments.js';
 import { programDto } from './dto.js';
+import { resolveCurrentChallenge } from './challenges.js';
+import { fail } from './errors.js';
 import { errorHandler } from './errors.js';
 export async function createApp(db,options={}) {
   const app=express();app.disable('x-powered-by');
@@ -35,7 +37,7 @@ export async function createApp(db,options={}) {
   app.use('/api',authMiddleware(db));
   app.use('/api/auth',authRouter(db));
   app.use('/api',requireUser,requireChangedPassword);
-  app.get('/api/program',(req,res)=>res.json(programDto()));
+  app.get('/api/program',async(req,res)=>{const challenge=await resolveCurrentChallenge(db,req.user,req.user.role==='teacher'?req.query.challengeId:undefined);if(!challenge)fail(404,'CHALLENGE_NOT_FOUND','현재 챌린지를 찾을 수 없어요.');res.json(programDto(challenge));});
   app.use('/api/student',requireRole('student'),studentRouter(db));
   const attachment=await attachmentRouters(db,storageDir);
   app.use('/api/student',requireRole('student'),attachment.student);
