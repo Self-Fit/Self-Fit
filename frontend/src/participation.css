@@ -1,0 +1,95 @@
+.participation-page{min-width:0}
+.participation-page .participation-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:20px}
+.participation-page .participation-heading h1{font-size:30px;font-weight:800;letter-spacing:-.035em;line-height:1.25}
+.participation-page .participation-heading p{font-size:15px;color:var(--t3);margin-top:6px}
+.participation-page .participation-heading>.chip{flex-shrink:0}
+.participation-page .participation-filters{margin:24px 0 16px}
+.participation-page .participation-select{position:relative;display:inline-flex;align-items:center}
+.participation-page .participation-select select{appearance:none;padding-right:36px;min-width:118px;cursor:pointer}
+.participation-page .participation-select>svg{position:absolute;right:13px;pointer-events:none;color:var(--t3);transform:rotate(90deg)}
+.participation-page .participation-reset{margin-left:auto;color:var(--t3);font-size:13px;padding:0 8px;height:40px}
+.participation-page .participation-reset:disabled{opacity:.45;cursor:default}
+.participation-page :is(button,select):focus-visible,.participation-page .participation-week-scroll:focus-visible{outline:2px solid var(--g);outline-offset:3px}
+.participation-page .participation-stats .stat{min-width:0;padding:22px 24px}
+.participation-page .participation-stats .stat:first-child{flex:1.05}
+.participation-page .participation-stats .stat:last-child{flex:1.3}
+.participation-page .participation-stats .v{font-size:34px;font-variant-numeric:tabular-nums}
+.participation-page .participation-stats .d{margin-top:4px}
+.participation-page .participation-method{display:flex;align-items:flex-start;gap:6px;font-size:12px;color:var(--t3);margin:12px 2px 24px;line-height:1.6}
+.participation-page .participation-method>svg{margin-top:2px;flex-shrink:0}
+.participation-page .participation-chart-card{padding:24px;min-width:0;overflow:hidden}
+.participation-page .participation-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.participation-page .participation-card-sub{font-size:12px;color:var(--t3);margin-top:3px}
+.participation-page .participation-legend{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t3);white-space:nowrap}
+.participation-page .participation-legend>i{height:8px;width:8px;border-radius:3px;background:var(--g)}
+.participation-page .participation-week-chart{display:flex;gap:8px;margin-top:24px;min-width:0}
+.participation-page .participation-axis{position:relative;width:36px;flex-shrink:0;height:180px;font-size:10px;color:var(--t4);text-align:right;font-variant-numeric:tabular-nums}
+.participation-page .participation-axis span{position:absolute;right:0;transform:translateY(-50%)}
+.participation-page .participation-axis span:nth-child(1){top:24px}
+.participation-page .participation-axis span:nth-child(2){top:102px}
+.participation-page .participation-axis span:nth-child(3){top:180px}
+.participation-page .participation-week-scroll{min-width:0;flex:1;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
+.participation-page .participation-week-bars{display:flex;gap:10px;list-style:none;min-width:720px}
+.participation-page .participation-week{flex:1;min-width:0;text-align:center}
+.participation-page .participation-week-plot{height:180px;position:relative;padding-top:24px;display:flex;justify-content:center;border-bottom:1px solid var(--line);background:linear-gradient(to bottom,transparent 23px,var(--line) 23px,var(--line) 24px,transparent 24px,transparent 101px,var(--line) 101px,var(--line) 102px,transparent 102px)}
+.participation-page .participation-week-track{position:relative;width:100%;max-width:38px;height:100%;background:var(--g-soft);border-radius:7px 7px 0 0;overflow:hidden}
+.participation-page .participation-week-fill{position:absolute;left:0;right:0;bottom:0;background:var(--g);border-radius:7px 7px 0 0}
+.participation-page .participation-week-rate{position:absolute;top:0;left:0;right:0;font-size:12px;font-weight:800;color:var(--g-deep);font-variant-numeric:tabular-nums;white-space:nowrap}
+.participation-page .participation-week-number{display:block;font-size:12px;font-weight:800;margin-top:10px}
+.participation-page .participation-week-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--t3);margin-top:2px}
+.participation-page .participation-week-count{display:block;font-size:10px;color:var(--t3);margin-top:5px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.participation-page .participation-week.is-pending .participation-week-track{background:repeating-linear-gradient(-45deg,var(--sunken) 0 5px,#fff 5px 10px);border:1px dashed var(--line-2);border-bottom:0}
+.participation-page .participation-week.is-pending .participation-week-rate{color:var(--t3)}
+.participation-page .participation-chart-foot{display:flex;justify-content:space-between;gap:12px;font-size:11px;color:var(--t3);margin-top:14px}
+.participation-page .participation-scroll-hint{display:flex;align-items:center;gap:2px;white-space:nowrap}
+.participation-page .participation-comparison-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:16px;margin-top:16px;align-items:start}
+.participation-page .participation-comparison-tabs{flex-shrink:0;border-radius:13px;padding:3px}
+.participation-page .participation-comparison-tabs button{height:30px;padding:0 12px;border-radius:10px;font-size:12px}
+.participation-page .participation-comparison-rows{margin-top:24px;display:flex;flex-direction:column;gap:22px}
+.participation-page .participation-comparison-label{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px}
+.participation-page .participation-comparison-label>div{display:flex;align-items:baseline;gap:8px;min-width:0}
+.participation-page .participation-comparison-label b{font-size:14px;font-weight:700}
+.participation-page .participation-comparison-label span{font-size:11px;color:var(--t3);white-space:nowrap}
+.participation-page .participation-comparison-label strong{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.participation-page .participation-comparison-track{height:9px;border-radius:var(--r-pill);background:var(--sunken);overflow:hidden}
+.participation-page .participation-comparison-track>span{display:block;height:100%;background:var(--g);border-radius:inherit}
+.participation-page .participation-comparison-count{font-size:11px;color:var(--t3);margin-top:6px;font-variant-numeric:tabular-nums}
+.participation-page .participation-denominator{font-size:11px;color:var(--t3);border-top:1px solid var(--line);padding-top:14px;margin-top:24px}
+.participation-page .participation-empty{padding:28px 0;display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--t3);font-size:13px}
+.participation-page .participation-state{padding:32px 24px;min-height:190px;display:flex;align-items:center;justify-content:center}
+.participation-page .participation-state>.notice-error{width:100%}
+.participation-page .participation-no-results{margin-top:16px}
+.participation-page.is-mobile .participation-heading{align-items:flex-start;gap:8px}
+.participation-page.is-mobile .participation-heading h1{font-size:24px}
+.participation-page.is-mobile .participation-heading p{font-size:13px;max-width:250px}
+.participation-page.is-mobile .participation-heading>.chip{display:none}
+.participation-page.is-mobile .participation-filters{gap:8px;margin-top:20px}
+.participation-page.is-mobile .participation-select{flex:1 1 calc(50% - 4px);min-width:0}
+.participation-page.is-mobile .participation-select select{width:100%;min-width:0}
+.participation-page.is-mobile .participation-target-filter{order:2;flex:1 1 calc(100% - 80px);justify-content:center}
+.participation-page.is-mobile .participation-target-filter button{flex:1;justify-content:center}
+.participation-page.is-mobile .participation-reset{order:3;margin-left:0;padding:0 6px}
+.participation-page.is-mobile .participation-stats{flex-wrap:wrap}
+.participation-page.is-mobile .participation-stats .stat{padding:16px;flex:1 1 50%;border-right:0;min-width:0}
+.participation-page.is-mobile .participation-stats .stat:first-child{flex:1 1 100%;border-bottom:1px solid var(--line);padding:18px 16px}
+.participation-page.is-mobile .participation-stats .stat:nth-child(2){border-right:1px solid var(--line)}
+.participation-page.is-mobile .participation-stats .stat:last-child{flex:1 1 50%}
+.participation-page.is-mobile .participation-stats .v{font-size:25px}
+.participation-page.is-mobile .participation-stats .stat:first-child .v{font-size:36px}
+.participation-page.is-mobile .participation-stats .v small{font-size:12px}
+.participation-page.is-mobile .participation-completed-value small{display:block;margin:0;font-size:11px}
+.participation-page.is-mobile .participation-stats .l{font-size:12px}
+.participation-page.is-mobile .participation-stats .d{font-size:11px}
+.participation-page.is-mobile .participation-method{font-size:11px;margin:10px 0 20px}
+.participation-page.is-mobile .participation-chart-card{padding:18px 16px}
+.participation-page.is-mobile .participation-card-head{gap:10px;flex-wrap:wrap}
+.participation-page.is-mobile .participation-card-head .q{font-size:16px}
+.participation-page.is-mobile .participation-card-sub{font-size:11px}
+.participation-page.is-mobile .participation-week-chart{gap:5px;margin-top:20px}
+.participation-page.is-mobile .participation-axis{width:30px}
+.participation-page.is-mobile .participation-chart-foot{flex-direction:column;gap:6px;font-size:10px}
+.participation-page.is-mobile .participation-scroll-hint{align-self:flex-end}
+.participation-page.is-mobile .participation-comparison-grid{grid-template-columns:minmax(0,1fr);gap:12px;margin-top:12px}
+.participation-page.is-mobile .participation-comparison-tabs{margin-left:auto}
+.participation-page.is-mobile .participation-comparison-tabs button{padding:0 10px}
+.participation-page.is-mobile .participation-comparison-rows{gap:20px;margin-top:20px}

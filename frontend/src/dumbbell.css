@@ -1,0 +1,21 @@
+.dumbbell-editor .set-row .grow{min-width:0}
+.dumbbell-editor .mini-step .v{display:flex;align-items:baseline;justify-content:center;gap:2px;min-width:52px}
+.dumbbell-editor .mini-step input{width:32px;min-width:0;border:0;padding:0;outline:0;background:transparent;text-align:center;font-size:17px;font-weight:800;color:var(--t1);appearance:textfield}
+.dumbbell-editor .mini-step input::-webkit-inner-spin-button{appearance:none}
+.dumbbell-editor .mini-step input::placeholder{color:var(--t4)}
+.dumbbell-editor .mini-step input:focus-visible{outline:2px solid var(--g);outline-offset:3px;border-radius:4px}
+.dumbbell-editor .mini-step button:disabled{opacity:.4;cursor:default}
+.dumbbell-details .kv>div{align-items:flex-start;gap:10px}
+.dumbbell-details .kv>div>span{min-width:0;flex:1}
+.dumbbell-details .kv>div>b{font-size:13px;font-variant-numeric:tabular-nums}
+.dumbbell-comparison{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.dumbbell-comparison .q{font-size:14px}
+.dumbbell-comparison .kv>div{flex-direction:column;gap:4px}
+.dumbbell-history-record .fw8.num-font{font-size:22px!important;line-height:1.5}
+.dumbbell-value-detail{white-space:pre-line;overflow-wrap:anywhere;font-size:13px!important;line-height:1.7}
+.mobile-app .dumbbell-editor .set-row{gap:8px;flex-wrap:wrap}
+.mobile-app .dumbbell-editor .set-row .grow{flex-basis:158px}
+.mobile-app .dumbbell-editor .set-row .rule{font-size:11px}
+.mobile-app .dumbbell-comparison{grid-template-columns:minmax(0,1fr);gap:16px}
+
+.modal.dumbbell-correction-modal{position:fixed;max-height:calc(100vh - 48px);overflow:auto}

@@ -1,0 +1,160 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+model User {
+  id                 String @id @default(uuid())
+  role               String
+  studentNumber      String @unique
+  name               String
+  grade              Int?
+  classNumber        Int?
+  targetType         String?
+  participating      Boolean @default(false)
+  passwordHash       String
+  mustChangePassword Boolean @default(true)
+  weekendReminder    Boolean @default(false)
+  lastLoginAt        DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  sessions           Session[]
+  records            DailyRecord[]
+  notifications      Notification[]
+  subscriptions      PushSubscription[]
+  requestedCorrections Correction[] @relation("requester")
+  decidedCorrections Correction[] @relation("decider")
+  imports            RosterImport[]
+  sourceRows         StudentSource[]
+  @@index([role, grade, classNumber])
+}
+model Session {
+  id        String @id
+  userId    String
+  user      User @relation(fields:[userId], references:[id], onDelete:Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([userId])
+  @@index([expiresAt])
+}
+model DailyRecord {
+  id          String @id @default(uuid())
+  userId      String
+  user        User @relation(fields:[userId], references:[id], onDelete:Restrict)
+  date        String
+  value       Json
+  sourceDatasetId String?
+  sourceDataset SourceDataset? @relation(fields:[sourceDatasetId], references:[id], onDelete:Restrict)
+  sourceMetadata Json?
+  version     Int @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  attachments Attachment[]
+  corrections Correction[]
+  revisions   RecordRevision[]
+  @@unique([userId, date])
+  @@index([date])
+  @@index([sourceDatasetId])
+}
+model SourceDataset {
+  id           String @id @default(uuid())
+  hash         String @unique @db.VarChar(64)
+  filename     String
+  metadataJson Json
+  importedAt   DateTime @default(now())
+  sourceRows   StudentSource[]
+  records      DailyRecord[]
+}
+model StudentSource {
+  id           String @id @default(uuid())
+  datasetId    String
+  dataset      SourceDataset @relation(fields:[datasetId], references:[id], onDelete:Restrict)
+  userId       String
+  user         User @relation(fields:[userId], references:[id], onDelete:Restrict)
+  rosterJson   Json
+  fitnessJson  Json?
+  metadataJson Json?
+  @@unique([datasetId, userId])
+  @@index([userId])
+}
+model RecordRevision {
+  id        String @id @default(uuid())
+  recordId  String
+  record    DailyRecord @relation(fields:[recordId], references:[id], onDelete:Restrict)
+  value     Json
+  version   Int
+  actorId   String
+  source    String
+  createdAt DateTime @default(now())
+  @@index([recordId])
+}
+model Attachment {
+  id           String @id @default(uuid())
+  recordId     String
+  record       DailyRecord @relation(fields:[recordId], references:[id], onDelete:Restrict)
+  name         String
+  storageKey   String @unique
+  kind         String
+  mimeType     String
+  size         Int
+  duration     Float?
+  createdAt    DateTime @default(now())
+  @@index([recordId])
+}
+model Correction {
+  id             String @id @default(uuid())
+  recordId       String
+  record         DailyRecord @relation(fields:[recordId], references:[id], onDelete:Restrict)
+  requesterId    String
+  requester      User @relation("requester", fields:[requesterId], references:[id], onDelete:Restrict)
+  deciderId      String?
+  decider        User? @relation("decider", fields:[deciderId], references:[id], onDelete:Restrict)
+  beforeValue    Json
+  requestedValue Json
+  baseVersion    Int
+  reason         String
+  status         String @default("pending")
+  decisionReason String?
+  createdAt      DateTime @default(now())
+  decidedAt      DateTime?
+  @@index([status, createdAt])
+  @@index([recordId])
+}
+model Notification {
+  id         String @id @default(uuid())
+  userId     String
+  user       User @relation(fields:[userId], references:[id], onDelete:Cascade)
+  eventKey   String @unique
+  type       String
+  title      String
+  body       String
+  readAt     DateTime?
+  createdAt  DateTime @default(now())
+  pushState  String @default("pending")
+  attempts   Int @default(0)
+  nextTryAt  DateTime @default(now())
+  deliveredEndpoints Json @default("[]")
+  @@index([userId, createdAt])
+  @@index([pushState, nextTryAt])
+}
+model PushSubscription {
+  id        String @id @default(uuid())
+  userId    String
+  user      User @relation(fields:[userId], references:[id], onDelete:Cascade)
+  endpoint  String @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  @@index([userId])
+}
+model RosterImport {
+  id        String @id @default(uuid())
+  teacherId String
+  teacher   User @relation(fields:[teacherId], references:[id], onDelete:Cascade)
+  rows      Json
+  consumed  Boolean @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}

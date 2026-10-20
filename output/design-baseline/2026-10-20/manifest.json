@@ -1,0 +1,451 @@
+{
+  "baseline": "2026-10-20",
+  "source": "docs/디자인",
+  "files": [
+    {
+      "file": "assets/style.css",
+      "sha256": "fd96aaa8ddbec7de5cc9e33fb010fefcd624c5c5797b8e340c11aa2270621210",
+      "bytes": 41296
+    },
+    {
+      "file": "index.html",
+      "sha256": "cc3fe0b6cd27973c681157490af3d97f605050cafde90d122da1fc8cfc07f75e",
+      "bytes": 21836
+    },
+    {
+      "file": "모바일/교사/MT-01_교사_로그인.html",
+      "sha256": "9fbf8fc3ec4d3118cdb88e7cc9d60c4c99b3f53bbd2e5996bdb58862a5ed21f7",
+      "bytes": 3860
+    },
+    {
+      "file": "모바일/교사/MT-02_참여_현황.html",
+      "sha256": "3c9e7862677143baf6f46aaf011a7195c2496346ca869195a8865044b0330ae5",
+      "bytes": 36248
+    },
+    {
+      "file": "모바일/교사/MT-03_필터_시트.html",
+      "sha256": "ff8aefb91a1c38b50a87ccf8ff6a453700852e2b555274fb12563cc3fe8faa6e",
+      "bytes": 6934
+    },
+    {
+      "file": "모바일/교사/MT-04_날짜_기록_상세_시트.html",
+      "sha256": "11814c39e2851fe3129121a165ab70ef3726c94c411f78b1f27fbdedc125dfd6",
+      "bytes": 37364
+    },
+    {
+      "file": "모바일/교사/MT-05_학생_상세.html",
+      "sha256": "6d94c9ab1b6dee48f60bf6db7b209bc1095cae32ba5614e7e2c0fdcfa117c355",
+      "bytes": 7619
+    },
+    {
+      "file": "모바일/교사/MT-06_정정_요청함.html",
+      "sha256": "3160060a9d489149baaae09ab9d5fd4bafda89f1c6137e4a86cc6895b6bed65b",
+      "bytes": 8468
+    },
+    {
+      "file": "모바일/교사/MT-07_정정_요청_처리.html",
+      "sha256": "105237184ff987a05794bc7df27532aaeb2c0b530e0fb119c04dc8b35f1781d6",
+      "bytes": 5136
+    },
+    {
+      "file": "모바일/교사/MT-08_반려_사유_입력.html",
+      "sha256": "bc57641cb07cb7f66e16b544a01c510e64ea0612e09c191dd6d3e3d5244deffc",
+      "bytes": 3416
+    },
+    {
+      "file": "모바일/교사/MT-09_명단.html",
+      "sha256": "dee0ed77031ffc46b2ff118d0135b9e4cbe268ad5235dcd261f5a9c0730936d3",
+      "bytes": 8369
+    },
+    {
+      "file": "모바일/교사/MT-10_학생_정보_수정.html",
+      "sha256": "01f3779c16c85e4a768896c7bc5d5e5257a201abb68e5918e5369133a7ac9cc1",
+      "bytes": 4685
+    },
+    {
+      "file": "모바일/교사/MT-11_비밀번호_초기화_확인.html",
+      "sha256": "fc4c213c40a0e93ddc6012c01f03f26101a90427b765833c747054b8cb9e338c",
+      "bytes": 3515
+    },
+    {
+      "file": "모바일/교사/MT-12_임시_비밀번호_발급.html",
+      "sha256": "6262983d02be9fbbec085b606014edc8deecb0558d46af7e4d162107d42be055",
+      "bytes": 3607
+    },
+    {
+      "file": "모바일/교사/MT-13_엑셀_내보내기.html",
+      "sha256": "d50fbb91d63d8a29ba6b3ac2ac456d0c01e84b5385174b4a028c1f167b32b6c0",
+      "bytes": 8227
+    },
+    {
+      "file": "모바일/교사/MT-14_더보기.html",
+      "sha256": "9e8790423da282842d8fc5767334073dbf560294dba9829196e70968806036b1",
+      "bytes": 7101
+    },
+    {
+      "file": "모바일/교사/MT-15_검색_결과_없음.html",
+      "sha256": "4cddc40468d52da28c5a38c636cd80175e91f4e00d96a1dd05b80112bcfff03c",
+      "bytes": 6022
+    },
+    {
+      "file": "모바일/학생/MS-01_로그인.html",
+      "sha256": "c1ebf587728784a425923ffc7264808c3d06eedfece8667c63d9c107966d2055",
+      "bytes": 3956
+    },
+    {
+      "file": "모바일/학생/MS-02_로그인_오류.html",
+      "sha256": "b2cccd7ed90fe8673a74484bbe9f29fa408bdf639d9446c8fce1f74e52699cb8",
+      "bytes": 4652
+    },
+    {
+      "file": "모바일/학생/MS-03_첫_로그인_비밀번호_변경.html",
+      "sha256": "77e57312f14bb91b08f9d2c73f65d9d521d9e6c542a2ec74487ad38a59166f1c",
+      "bytes": 4628
+    },
+    {
+      "file": "모바일/학생/MS-04_홈_화면_추가-알림_안내.html",
+      "sha256": "117a2994127d89f88b52f6e4b15eb9794753639960ded4dfab94e14fdd08e927",
+      "bytes": 4951
+    },
+    {
+      "file": "모바일/학생/MS-05_참여_신청.html",
+      "sha256": "51990a0083b6599c94e41d759758ffc4b0e431c433416c079c54ff361d04c2ba",
+      "bytes": 5037
+    },
+    {
+      "file": "모바일/학생/MS-06_참여_신청_완료.html",
+      "sha256": "4b1c34b54d1c02ed7f5e586da411e26e73e56ea4e758e0df3977eb6e7379015d",
+      "bytes": 4547
+    },
+    {
+      "file": "모바일/학생/MS-07_미참여_안내.html",
+      "sha256": "9d26db9b0930e179af1dd4ed6051e500b6564d1629cd4cdbed1446ae3e393cdf",
+      "bytes": 5168
+    },
+    {
+      "file": "모바일/학생/MS-08_챌린지_홈_-_시작_전.html",
+      "sha256": "afdd84d8ad4cb218e9b95050b2edbcca251a94a989e588e8943c6c1c54efaeb0",
+      "bytes": 6781
+    },
+    {
+      "file": "모바일/학생/MS-09_챌린지_홈_-_운영_중.html",
+      "sha256": "1705c6818e7194fb0051625bd21c689c59dfc46b526b9b6ab4a1d2151abf6376",
+      "bytes": 8496
+    },
+    {
+      "file": "모바일/학생/MS-10_챌린지_홈_-_휴식_주.html",
+      "sha256": "187f01a245f1f92f95eaad8cbc9b84b4f7432ff78e789245f6701407648b990c",
+      "bytes": 7174
+    },
+    {
+      "file": "모바일/학생/MS-11_챌린지_홈_-_프로그램_종료.html",
+      "sha256": "ba53d5a9abf942564e049f3ec25e8a2e66c223c9702f780e3fd34b9b16cf3a8c",
+      "bytes": 9668
+    },
+    {
+      "file": "모바일/학생/MS-12_주차_상세_시트.html",
+      "sha256": "0841c39239d9221ef2a576851ac39334f059abd76e6e0d1bc6600bf71862a8e4",
+      "bytes": 8170
+    },
+    {
+      "file": "모바일/학생/MS-13_오늘_기록_-_걷기_구간.html",
+      "sha256": "8c6c4c90b0ba933608ff6d240e3a92a6c32a3896528a87c7b61f6e2e8dd13ae3",
+      "bytes": 6948
+    },
+    {
+      "file": "모바일/학생/MS-14_오늘_기록_-_체크형.html",
+      "sha256": "815bfda6ef679b2966552a8663d249cc8bcb6685758ea2bc70084c706cc25f0a",
+      "bytes": 6353
+    },
+    {
+      "file": "모바일/학생/MS-15_오늘_기록_-_체크형_주말_보충.html",
+      "sha256": "063a022aa2e6fa84c43b0e2309345c383d209c04c79966dc73f6d7d635e8c773",
+      "bytes": 6151
+    },
+    {
+      "file": "모바일/학생/MS-16_오늘_기록_-_횟수_(일일+주간).html",
+      "sha256": "33c2c7f9be9e23c608e177f69f7b8d56231e46d1b19ed199fd870c167705898c",
+      "bytes": 6311
+    },
+    {
+      "file": "모바일/학생/MS-17_오늘_기록_-_횟수_(누적).html",
+      "sha256": "0d701de1891906551d0d0bca692139c67de69a0eaed9b40ee450c3a681fb51b4",
+      "bytes": 7069
+    },
+    {
+      "file": "모바일/학생/MS-18_오늘_기록_-_거리.html",
+      "sha256": "7d6fa64fd3c66511e21d5a82d00072335bc1fd68831014777b9f0d8b4e9cbf6c",
+      "bytes": 6063
+    },
+    {
+      "file": "모바일/학생/MS-19_오늘_기록_-_덤벨_세트.html",
+      "sha256": "55ad4e2a8fd3199f49e1731c02e3d52e0c4822e86bafe4786d6efe5b0f09c01a",
+      "bytes": 6146
+    },
+    {
+      "file": "모바일/학생/MS-20_저장_결과_-_주간_완료.html",
+      "sha256": "539edb30dcbc2b51e7127771c693aa51128bc884fd098a10ed5418bd0132dfe0",
+      "bytes": 3977
+    },
+    {
+      "file": "모바일/학생/MS-21_저장_결과_-_진행_중.html",
+      "sha256": "5b933eb37d7e80fef155baff9354f6c8c286a2f6215662c6ae0e4a6063ddd26d",
+      "bytes": 3972
+    },
+    {
+      "file": "모바일/학생/MS-22_첨부_업로드_실패.html",
+      "sha256": "b113d6f83d52f3f5c2922db74acdb49f698eb2015546ef3e695d4342285f6cfb",
+      "bytes": 5526
+    },
+    {
+      "file": "모바일/학생/MS-23_저장_실패_-_연결_끊김.html",
+      "sha256": "7d9a5143b857fdbf1c6182911bdaa363fb97e72fe92d2f9ba8560ba2d18dee8d",
+      "bytes": 4987
+    },
+    {
+      "file": "모바일/학생/MS-24_입력_확인_경고.html",
+      "sha256": "4220ea2cf32c56a8e4fbcd5a4f915c69951cc1ad8ca3a013a90274ef879eef02",
+      "bytes": 4265
+    },
+    {
+      "file": "모바일/학생/MS-25_지난_날짜_-_기록_열람.html",
+      "sha256": "5213c5dd07819c2d83b573c9a449b1ed0051f192a0ac481fe014e5ee59cfc019",
+      "bytes": 4992
+    },
+    {
+      "file": "모바일/학생/MS-26_지난_날짜_-_미입력.html",
+      "sha256": "2903ee3ab41dd7e8f5fb6602472c53662b6f98bf92aa8f559737cff19fadfcd8",
+      "bytes": 3771
+    },
+    {
+      "file": "모바일/학생/MS-27_다가올_날짜_-_미리보기.html",
+      "sha256": "86fc2169ede9c9529ff469df7d15ebde23865ee0720b72eb19e6945d8841e93b",
+      "bytes": 4115
+    },
+    {
+      "file": "모바일/학생/MS-28_정정_요청_작성.html",
+      "sha256": "ec86a7a516f9db862631a659e012c361e6d28fceb96d747926117994ceec9e4c",
+      "bytes": 4368
+    },
+    {
+      "file": "모바일/학생/MS-29_내_기록.html",
+      "sha256": "18053081f0a2bbf2814d153078a5e1e59d3f571ebdb552aced3525786d1317e7",
+      "bytes": 9071
+    },
+    {
+      "file": "모바일/학생/MS-30_내_기록_-_주차_상세.html",
+      "sha256": "ee7b0d5f72f5061fa7bd9d8e25e256364a9d63b27ceb38abf181733a712008be",
+      "bytes": 6198
+    },
+    {
+      "file": "모바일/학생/MS-31_정정_요청_내역.html",
+      "sha256": "c77ae57652ffbe419f33884c5da37b7be9401d49ac2568a33babd44ad5ae75b0",
+      "bytes": 4920
+    },
+    {
+      "file": "모바일/학생/MS-32_정정_요청_상세_-_반려.html",
+      "sha256": "08439d2aa7f50bf4b139e55bf8551b93f2d0209e2b065e5cde4859695af2259a",
+      "bytes": 4242
+    },
+    {
+      "file": "모바일/학생/MS-33_첨부_보기.html",
+      "sha256": "c348af4826814420b0e0a82acff2f5af1b0ffffb5d10df5ac4b84e9ea50ed5a7",
+      "bytes": 4947
+    },
+    {
+      "file": "모바일/학생/MS-34_알림.html",
+      "sha256": "a3ba77b6196d0d24d0b27b730c431f40b2f0755b41c87fe144f8351fcd009bd0",
+      "bytes": 5309
+    },
+    {
+      "file": "모바일/학생/MS-35_알림_-_비어_있음.html",
+      "sha256": "a49d5b43850a04f385105347f45f0b6ad65bcc3dd82abae4fd7bcdb1302b0060",
+      "bytes": 3233
+    },
+    {
+      "file": "모바일/학생/MS-36_마이.html",
+      "sha256": "a36a0749fe6fde9da7eb71f0223a245e35bb0a31fa90c20f19c0927a37da1775",
+      "bytes": 7197
+    },
+    {
+      "file": "모바일/학생/MS-37_비밀번호_변경.html",
+      "sha256": "72dc72a6d5a35ffcacf945d941cd665431aaa77f530ad280544567259a35885c",
+      "bytes": 3950
+    },
+    {
+      "file": "모바일/학생/MS-38_알림_설정.html",
+      "sha256": "d7d858454824333997f2072a781d856a08c55cae3b8c38ffba0b7af2e8f5682e",
+      "bytes": 3957
+    },
+    {
+      "file": "모바일/학생/MS-39_로그아웃_확인.html",
+      "sha256": "6e5c951a35072eb91d72e729f4b26b35c0ad2d5871dd2ea57b46278d1f0ac375",
+      "bytes": 4807
+    },
+    {
+      "file": "웹/교사/WT-01_교사_로그인.html",
+      "sha256": "f8409588f40f8e6f67bf4056cc19c3bc4d984556e3cc32084d517e7a82cf1ca8",
+      "bytes": 3804
+    },
+    {
+      "file": "웹/교사/WT-02_참여_현황.html",
+      "sha256": "b3d1ab79053bb4b41afa53b6211f61cc04543115c2752eb77d4cee901c982bec",
+      "bytes": 175023
+    },
+    {
+      "file": "웹/교사/WT-03_참여_현황_-_날짜_상세.html",
+      "sha256": "a4dd7a1ce64d923743ae5615d2909c0f3a21f4ed321adc9d869408ed5a8d9564",
+      "bytes": 179672
+    },
+    {
+      "file": "웹/교사/WT-04_참여_현황_-_결과_없음.html",
+      "sha256": "7873294d55bd6437523a347acc832ba2209ce50598d81ab65fff54f54c95d8db",
+      "bytes": 7821
+    },
+    {
+      "file": "웹/교사/WT-05_학생_상세.html",
+      "sha256": "9dec210d6bb7abe90a108981fa422c39b864097216672f3c9d91a798aa17ebcc",
+      "bytes": 10938
+    },
+    {
+      "file": "웹/교사/WT-06_정정_요청함.html",
+      "sha256": "f513d8dad970f636c5ec7f8a6829b94933f7540e2a3ba68584ad338451931673",
+      "bytes": 9571
+    },
+    {
+      "file": "웹/교사/WT-07_반려_사유_모달.html",
+      "sha256": "62e81c55ffcf5bde088e32e4e99ae7df032a3dcef9db60a9cddf704bc71538b5",
+      "bytes": 10434
+    },
+    {
+      "file": "웹/교사/WT-08_정정_처리_이력.html",
+      "sha256": "f5e1b256978a7b03293599232768fcabd69fa82441a97e80895f3d28d44cd1b8",
+      "bytes": 6655
+    },
+    {
+      "file": "웹/교사/WT-09_명단_관리.html",
+      "sha256": "1401bf7e1cacf170ffb0529602a7c4e540942bde75f030b6a55b48a889245e81",
+      "bytes": 11325
+    },
+    {
+      "file": "웹/교사/WT-10_엑셀_일괄_등록_-_업로드.html",
+      "sha256": "e5fb0468d314096c9bc6b0aa89cbcaa7d3cbb26c94a45319cc233f4ad705427e",
+      "bytes": 5915
+    },
+    {
+      "file": "웹/교사/WT-11_엑셀_일괄_등록_-_검증_결과.html",
+      "sha256": "9abecaabb41fdf0781fd7b33eede69dc71a7d34cc9ab1c0a21848abe8f65964a",
+      "bytes": 7124
+    },
+    {
+      "file": "웹/교사/WT-12_학생_개별_등록_모달.html",
+      "sha256": "10adb7da1b396b2aba54ce9cc0fb64901638bca8e9f3daa8ac267c47093057d1",
+      "bytes": 5608
+    },
+    {
+      "file": "웹/교사/WT-13_비밀번호_초기화_결과.html",
+      "sha256": "007e99d7267f20ba48ed1f045a9c449ef6f8cae5696ecd9d1e5e05b08beb624c",
+      "bytes": 5384
+    },
+    {
+      "file": "웹/교사/WT-14_엑셀_내보내기_모달.html",
+      "sha256": "21d84f6bc23f574e4eeefbbdf5ea7dc15f3f9c92383272c298f827ba42b7e465",
+      "bytes": 7891
+    },
+    {
+      "file": "웹/교사/WT-15_운영_일정.html",
+      "sha256": "2f5300b31c9b9cf1ab77b0d317407976750526d04972d08aa625b0ac40a17619",
+      "bytes": 8033
+    },
+    {
+      "file": "웹/교사/WT-16_미션_상세_-_덤벨.html",
+      "sha256": "291860044d100baa3a89f4e963689f6dd5fe30d131785c7705f51c511ec9ece6",
+      "bytes": 5428
+    },
+    {
+      "file": "웹/학생/WS-01_로그인.html",
+      "sha256": "d8df3864d3a5c8059c047cbec12440efbe5468af1a8142cee222d86a68e25c02",
+      "bytes": 4024
+    },
+    {
+      "file": "웹/학생/WS-02_첫_로그인_비밀번호_변경.html",
+      "sha256": "86706c6f30949172a0044c13ce69a2526422b7568cb7fbf9b46c54da4b0c199c",
+      "bytes": 4672
+    },
+    {
+      "file": "웹/학생/WS-03_참여_신청.html",
+      "sha256": "5a21661c85251668f173a28423807e46f98dc65c64b6346282cec9075fadbf0a",
+      "bytes": 6815
+    },
+    {
+      "file": "웹/학생/WS-04_챌린지_홈_-_운영_중.html",
+      "sha256": "ad0b8ff43f1aa626656730a60c2a9bfadffb9fd26ba8706fc25bb52552a7d198",
+      "bytes": 9557
+    },
+    {
+      "file": "웹/학생/WS-05_챌린지_홈_-_휴식_주.html",
+      "sha256": "51f40dd194c7c10529d7be614ed637e0051ac18bea3793a4813ea4936bf8260b",
+      "bytes": 7027
+    },
+    {
+      "file": "웹/학생/WS-06_챌린지_홈_-_프로그램_종료.html",
+      "sha256": "e4d92aeec011b4723b12b5698759781a20828c6f6bd48ffec58b237a972a9b09",
+      "bytes": 7765
+    },
+    {
+      "file": "웹/학생/WS-07_오늘_기록_-_걷기_구간.html",
+      "sha256": "e625e32b5d9aaa4ab2a4443d553005441e971fd407e7bb948229def96b286a8f",
+      "bytes": 8482
+    },
+    {
+      "file": "웹/학생/WS-08_오늘_기록_-_체크형.html",
+      "sha256": "3bdd503d9e6a8e94f8ea79d57db2f4980063f6c564794b8441118faed922dc59",
+      "bytes": 8057
+    },
+    {
+      "file": "웹/학생/WS-09_오늘_기록_-_횟수_(일일+주간).html",
+      "sha256": "f13a872d1007b830206cc4703a353ebf8e01194520d31789616723f49f5fd417",
+      "bytes": 7894
+    },
+    {
+      "file": "웹/학생/WS-10_오늘_기록_-_횟수_(누적).html",
+      "sha256": "632119215918b158c05b087694decf3a5d8908ce29ea8d30a2fd5497095b4205",
+      "bytes": 8734
+    },
+    {
+      "file": "웹/학생/WS-11_오늘_기록_-_거리.html",
+      "sha256": "0b32339f39286c69189c00a658b6ef727ec4705058d2bbbb0aed19ea0503678c",
+      "bytes": 7673
+    },
+    {
+      "file": "웹/학생/WS-12_오늘_기록_-_덤벨_세트.html",
+      "sha256": "569104927fdef4028cc05ba92f62553363a26688a66a21d1f766bc41aeab3320",
+      "bytes": 7747
+    },
+    {
+      "file": "웹/학생/WS-13_지난_기록_-_정정_요청.html",
+      "sha256": "6718897d6e9c738ce3681f2357f6cb53ffca5d507a38f3fd56cb921d74900054",
+      "bytes": 7701
+    },
+    {
+      "file": "웹/학생/WS-14_내_기록.html",
+      "sha256": "aab70d9a8790ce5ec47f35f963b4d80d778d94ccf472ab2d2c1183b526965cb9",
+      "bytes": 9687
+    },
+    {
+      "file": "웹/학생/WS-15_정정_요청_내역.html",
+      "sha256": "05ff43f88b463fd07a8d13e84ce738ba4e305b51057d582e2db08f8761f023b5",
+      "bytes": 5504
+    },
+    {
+      "file": "웹/학생/WS-16_알림_패널.html",
+      "sha256": "e6d59f9c1f5b0d81b857d35bdb518b08d85d92f441a01df7c8d87440996a0bb9",
+      "bytes": 6976
+    },
+    {
+      "file": "웹/학생/WS-17_마이_-_설정.html",
+      "sha256": "3cb91493237554bcc955d73ff06ede61c659f9939f93f007520a05247b7317fb",
+      "bytes": 6330
+    }
+  ]
+}

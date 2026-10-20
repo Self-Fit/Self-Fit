@@ -1,0 +1,21 @@
+node_modules/
+.local/
+.data/
+.env
+.env.*
+!.env.example
+frontend/dist/
+backend/uploads/
+backend/storage/
+backend/generated/
+*.log
+.DS_Store
+coverage/
+test-results/
+playwright-report/
+__pycache__/
+*.py[cod]
+*.dump
+*.private.json
+# Local verification captures can contain student records.
+output/implementation-previews/
