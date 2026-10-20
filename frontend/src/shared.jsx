@@ -60,7 +60,7 @@ export function Icon({ name = 'chevron', size = 20, className = '', ...props }) 
 export function Brand({ large = false }) { return <span className={`brand-original ${large ? 'large' : ''}`} role="img" aria-label="Self Fit"><span className="brand-symbol"><img src="/brand/self-fit-original.png" alt="" /></span><span className="brand-word"><img src="/brand/self-fit-original.png" alt="" /></span></span>; }
 export function AppFrame({ mode = 'web', role = 'student', user, onLogout, children, header = true, title, back, tabs = true }) {
   const teacher = role === 'teacher'; const prefix = `/${mode}`;
-  const nav = teacher ? [['참여 현황','/admin','grid'],['참여율','/admin/participation','chart'],['정정 요청함','/admin/corrections','inbox'],['명단 관리','/admin/students','user'],['운영 일정','/admin/schedule','calendar']] : [['챌린지','/','home'],['내 기록','/records','chart'],['마이','/me','user']];
+  const nav = teacher ? [['참여 현황','/admin','grid'],['참여율','/admin/participation','chart'],['정정 요청함','/admin/corrections','inbox'],['명단 관리','/admin/students','user'],['챌린지','/admin/challenges','flag'],['운영 일정','/admin/schedule','calendar']] : [['챌린지','/','home'],['내 기록','/records','chart'],['마이','/me','user']];
   const mobileNav = teacher ? [['현황','/admin','grid'],['정정 요청','/admin/corrections','inbox'],['명단','/admin/students','users'],['더보기','/admin/more','more']] : nav;
   const current = window.location.pathname;
   const link = suffix => prefix + (suffix === '/' ? '' : suffix);

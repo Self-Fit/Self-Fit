@@ -7,7 +7,8 @@
     "dev": "vite --host 127.0.0.1",
     "build": "node scripts/extract-design.mjs && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "extract-design": "node scripts/extract-design.mjs"
+    "extract-design": "node scripts/extract-design.mjs",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "react": "^19.1.0",

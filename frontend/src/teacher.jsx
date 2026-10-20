@@ -1,6 +1,7 @@
 import React, { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { api, AppFrame, ErrorNotice, Icon, Loading, Modal, navigate, useLocation, useResource } from './shared.jsx';
 import Participation from './participation.jsx';
+import ChallengesApp, { challengeRoute } from './challenges/ChallengesApp.jsx';
 import { DumbbellDetails, DumbbellComparison } from './dumbbell.jsx';
 import { isDumbbell, dumbbellSummary, dumbbellValueLabel, dumbbellValueText } from './dumbbell-values.js';
 import { dailyAchieved } from './student-utils.js';
@@ -202,6 +203,7 @@ function More({mode,user,onLogout}) {
   const label=program.data?.status==='ended'?'프로그램 종료':current?current.week+'주차 진행 중':program.data?.status==='rest'?'휴식 주':'시작 전';
   async function logout(){if(busy)return;setBusy(true);setError(null);try{await onLogout();}catch(e){setError(e);setBusy(false)}}
   return <><div className="page-title">더보기</div><div className="card pad mt20" style={{display:'flex',gap:14,alignItems:'center'}}><div className="avatar lg">{user.name.slice(0,1)}</div><div className="grow"><div className="fw8 fs18">{user.name}</div><div className="fs13 muted mt4">{user.studentNumber} · 총괄 교사</div></div></div><div className="list mt16">
+    <button className="li link" style={{width:'100%',textAlign:'left'}} onClick={()=>navigate('/'+mode+'/admin/challenges')}><div className="ico-wrap"><Icon name="flag"/></div><div className="k">챌린지</div><Icon name="chevron" size={18} className="chev"/></button>
     <button className="li link" style={{width:'100%',textAlign:'left'}} onClick={()=>navigate('/'+mode+'/admin/participation')}><div className="ico-wrap"><Icon name="chart"/></div><div className="k">참여율</div><Icon name="chevron" size={18} className="chev"/></button>
     <button className="li link" style={{width:'100%',textAlign:'left'}} onClick={()=>navigate('/'+mode+'/admin/schedule')}><div className="ico-wrap"><Icon name="calendar"/></div><div className="k">운영 일정</div><span className="v">{program.loading?'':label}</span><Icon name="chevron" size={18} className="chev"/></button>
     <button className="li link" style={{width:'100%',textAlign:'left'}} onClick={()=>setExporting(true)}><div className="ico-wrap"><Icon name="download"/></div><div className="k">엑셀 내보내기</div><Icon name="chevron" size={18} className="chev"/></button>
@@ -210,7 +212,8 @@ function More({mode,user,onLogout}) {
 }
 export default function TeacherApp({mode,user,onLogout}) {
   const location=useLocation(),path=location.split('?')[0].replace('/'+mode+'/admin',''),detail=path.match(/^\/students\/([^/]+)$/),isOverview=path===''||path==='/';
-  const screen=detail?<StudentDetail key={detail[1]} mode={mode} id={decodeURIComponent(detail[1])}/>:path==='/students'?<Roster mode={mode}/>:path.startsWith('/corrections')?<Corrections mode={mode}/>:path==='/more'?<More {...{mode,user,onLogout}}/>:path==='/schedule'?<Schedule mode={mode}/>:path==='/participation'?<Participation mode={mode}/>:<Overview mode={mode}/>;
-  const correctionDetail=path.match(/^\/corrections\/[^/]+$/),isParticipation=path==='/participation',sub=mode==='mobile'&&(!!detail||path==='/schedule'||isParticipation||!!correctionDetail);
-  return <AppFrame {...{mode,user,onLogout}} role="teacher" title={sub?(detail?'학생 상세':correctionDetail?'정정 요청 처리':isParticipation?'참여율':'운영 일정'):undefined} back={sub?()=>navigate('/'+mode+'/admin/'+(detail?'students':correctionDetail?'corrections':'more')):undefined} tabs={!sub}><div className={mode==='web'?'w-main '+(isOverview||isParticipation?'wide':''):'scroll'}>{mode==='mobile'&&!isOverview?<main className="page" style={detail?{paddingTop:20}:undefined}>{screen}</main>:screen}</div></AppFrame>;
+  const challenge=challengeRoute(path);
+  const screen=detail?<StudentDetail key={detail[1]} mode={mode} id={decodeURIComponent(detail[1])}/>:challenge?<ChallengesApp {...{mode,path}}/>:path==='/students'?<Roster mode={mode}/>:path.startsWith('/corrections')?<Corrections mode={mode}/>:path==='/more'?<More {...{mode,user,onLogout}}/>:path==='/schedule'?<Schedule mode={mode}/>:path==='/participation'?<Participation mode={mode}/>:<Overview mode={mode}/>;
+  const correctionDetail=path.match(/^\/corrections\/[^/]+$/),isParticipation=path==='/participation',sub=mode==='mobile'&&(!!detail||path==='/schedule'||isParticipation||!!correctionDetail||!!challenge);
+  return <AppFrame {...{mode,user,onLogout}} role="teacher" title={sub?(detail?'학생 상세':correctionDetail?'정정 요청 처리':isParticipation?'참여율':challenge?(challenge.id?'챌린지 상세':'챌린지'):'운영 일정'):undefined} back={sub?()=>navigate('/'+mode+'/admin/'+(detail?'students':correctionDetail?'corrections':challenge?.id?'challenges':'more')):undefined} tabs={!sub}><div className={mode==='web'?'w-main '+(isOverview||isParticipation?'wide':''):'scroll'}>{mode==='mobile'&&!isOverview?<main className="page" style={detail?{paddingTop:20}:undefined}>{screen}</main>:screen}</div></AppFrame>;
 }
