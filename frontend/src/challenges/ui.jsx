@@ -34,6 +34,19 @@ export function useFeedback() {
   return [message ? <div className="runtime-feedback" role="status">{message}</div> : null, setMessage];
 }
 
+/** Toast that outlives the screen that raised it (e.g. accepting an invitation switches the student home). */
+let shownToast = null;
+export function toast(message) {
+  shownToast?.remove();
+  const node = document.createElement('div');
+  node.className = 'runtime-feedback';
+  node.setAttribute('role', 'status');
+  node.textContent = message;
+  document.body.append(node);
+  shownToast = node;
+  setTimeout(() => { node.remove(); if (shownToast === node) shownToast = null; }, 2600);
+}
+
 export const PHASES = {
   draft: ['초안', ''],
   upcoming: ['시작 전', 'blue'],

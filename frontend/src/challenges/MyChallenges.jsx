@@ -3,7 +3,7 @@ import { AppFrame, EmptyState, ErrorNotice, Icon, Loading, Modal, navigate } fro
 import { StudentPage } from '../student-ui.jsx';
 import { dateText } from '../student-utils.js';
 import { acceptInvitation, declineInvitation, getStudentChallenge, listMyChallenges } from './index.js';
-import { MockNotice, PhaseChip, periodText, useAction, useFeedback, useLoad } from './ui.jsx';
+import { MockNotice, PhaseChip, periodText, toast, useAction, useLoad } from './ui.jsx';
 import { TYPE_LABELS, goalText } from './form.js';
 import { selectChallenge, selectedChallengeId, switchable } from './student.js';
 import '../challenges.css';
@@ -57,7 +57,6 @@ export default function MyChallenges({ mode, user, onLogout, onChange }) {
   const result = useLoad(() => listMyChallenges(), []);
   const [declining, setDeclining] = useState(null);
   const [notice, setNotice] = useState(null);
-  const [feedback, say] = useFeedback();
   const [busy, run] = useAction(error => { setNotice(error); if (error.code === 'INVITATION_CLOSED' || error.code === 'NO_INVITATION') result.refresh(); });
   const [selectedId, setSelectedId] = useState(null);
   const mine = result.data;
@@ -66,16 +65,16 @@ export default function MyChallenges({ mode, user, onLogout, onChange }) {
 
   async function accept(item) {
     setNotice(null);
-    if (await run(() => acceptInvitation(item.challenge.id))) { reload(); say('참여가 확정됐어요.'); }
+    if (await run(() => acceptInvitation(item.challenge.id))) { reload(); toast('참여가 확정됐어요.'); }
   }
   async function decline() {
     setNotice(null);
     const item = declining;
     const data = await run(() => declineInvitation(item.challenge.id));
     setDeclining(null);
-    if (data) { reload(); say('초대를 거절했어요.'); }
+    if (data) { reload(); toast('초대를 거절했어요.'); }
   }
-  function choose(id) { selectChallenge(id); setSelectedId(id); say('보고 있는 챌린지를 바꿨어요.'); }
+  function choose(id) { selectChallenge(id); setSelectedId(id); toast('보고 있는 챌린지를 바꿨어요.'); }
 
   let body;
   if (result.loading && !mine) body = <Loading />;
@@ -105,6 +104,5 @@ export default function MyChallenges({ mode, user, onLogout, onChange }) {
     {declining && <Modal title="초대를 거절할까요?" onClose={busy ? undefined : () => setDeclining(null)} footer={<><button type="button" className="btn secondary" disabled={busy} onClick={() => setDeclining(null)}>취소</button><button type="button" className="btn danger" disabled={busy} onClick={decline}>{busy ? '처리 중…' : '거절하기'}</button></>}>
       <p className="fs14 t2"><b>{declining.challenge.title}</b> 초대를 거절해요. 거절한 뒤에는 선생님이 다시 초대해야 참여할 수 있어요.</p>
     </Modal>}
-    {feedback}
   </AppFrame>;
 }
