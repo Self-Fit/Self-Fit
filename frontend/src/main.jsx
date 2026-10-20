@@ -14,7 +14,9 @@ function DesignPreview({id}) {
 }
 function ModePicker(){return <main className="mode-picker card"><div className="center"><Brand large/><h1 className="mt16">Self Fit 챌린지</h1><p className="fs14 muted mt8">사용할 화면을 선택해 주세요.</p></div><div className="stack gap12 mt24"><button className="btn primary lg block" onClick={()=>navigate('/web')}>웹 화면</button><button className="btn secondary lg block" onClick={()=>navigate('/mobile')}>모바일 화면</button></div></main>;}
 function App(){const location=useLocation();const {user,loading,error}=useSession();const pathname=location.split('?')[0];const match=pathname.match(/^\/(web|mobile)(\/.*)?$/);const design=pathname.match(/^\/design\/([MW][ST]-\d{2})$/);const mode=match?.[1];const path=match?.[2]||'/';
-  async function logout(){await api('/auth/logout',{method:'POST',body:{}});window.location.assign(`/${mode}/login`);}
+  const role=user?.role;
+  // Keep the identity stable: template-driven screens rebuild their DOM whenever this prop changes.
+  const logout=useCallback(async()=>{await api('/auth/logout',{method:'POST',body:{}});window.location.assign(`/${mode}${role==='teacher'?'/admin':''}/login`);},[mode,role]);
   useEffect(()=>{document.title=design?`${design[1]} · Self Fit 디자인 검수`:'Self Fit 챌린지';},[pathname]);
   if(design)return <DesignPreview id={design[1]}/>;
   if(pathname==='/design')return <DesignPreview id="MS-09"/>;

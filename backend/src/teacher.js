@@ -9,9 +9,10 @@ import { checkValue,checkProspectiveTotals } from './student.js';
 import { exportStudents,exportCorrections } from './export.js';
 import { buildParticipation } from './participation.js';
 const correctionInclude={record:{include:{attachments:true}},requester:true,decider:true};
+const duplicateNumber=(error,studentNumber)=>{if(error.code==='P2002') fail(409,'DUPLICATE_NUMBER',`이미 등록된 학번입니다: ${studentNumber}`);throw error;};
 export function parseFilters(query) {
   const filters={};
-  if(query.search) filters.search=requiredText(query.search,'검색어',200);
+  if(typeof query.search==='string'&&query.search.trim()) filters.search=requiredText(query.search,'검색어',200);
   for(const key of ['grade','classNumber','week']) if(query[key]!==undefined&&query[key]!=='') {
     const number=Number(query[key]);
     if(!Number.isSafeInteger(number)||number<1||number>2147483647||(key==='week'&&number>12)) fail(400,'INVALID_FILTER','검색 조건을 확인해 주세요.');
@@ -65,7 +66,7 @@ export function teacherRouter(db) {
   router.get('/students',async(req,res)=>res.json({students:(await filteredStudents(db,req.query)).students.map(userDto)}));
   router.post('/students',async(req,res)=>{
     const fields=studentFields(req.body || {});const password=temporaryPassword();
-    const user=await db.user.create({data:{...fields,role:'student',participating:fields.targetType==='required',passwordHash:await hashPassword(password),mustChangePassword:true}});
+    const user=await db.user.create({data:{...fields,role:'student',participating:fields.targetType==='required',passwordHash:await hashPassword(password),mustChangePassword:true}}).catch(error=>duplicateNumber(error,fields.studentNumber));
     res.status(201).json({user:userDto(user),temporaryPassword:password});
   });
   const getStudent=async(id,options={})=>{
@@ -79,7 +80,7 @@ export function teacherRouter(db) {
     await getStudent(req.params.id);const fields=studentFields(req.body || {},true);
     if(!Object.keys(fields).length) fail(400,'INVALID_INPUT','변경할 학생 정보를 입력해 주세요.');
     if(fields.targetType==='required') fields.participating=true;
-    res.json({user:userDto(await db.user.update({where:{id:req.params.id},data:fields}))});
+    res.json({user:userDto(await db.user.update({where:{id:req.params.id},data:fields}).catch(error=>duplicateNumber(error,fields.studentNumber)))});
   });
   router.delete('/students/:id',async(req,res)=>{
     await getStudent(req.params.id);

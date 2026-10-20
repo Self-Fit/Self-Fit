@@ -4,7 +4,7 @@ Express + PostgreSQL + Prisma로 실제 계정·운동 기록·정정·첨부·�
 
 ## 로컬 실행
 
-프로젝트 루트에서 실행합니다. Node.js 22.12 이상, PostgreSQL, 영상 검사용 `ffprobe`가 필요합니다. 영상 회귀 테스트에는 `ffmpeg`도 사용합니다.
+프로젝트 루트에서 실행합니다. Node.js 22.12 이상, PostgreSQL, 영상 검사용 `ffprobe`가 필요합니다. 영상 회귀 테스트에는 `ffmpeg`도 사용하며, 없으면 영상 길이 검사만 건너뜁니다(`FFMPEG_PATH`로 경로 지정 가능).
 
 ```sh
 npm install
@@ -49,8 +49,12 @@ npm run bootstrap-teacher --workspace backend
 | `HOST`, `PORT` | API 주소. 기본 `127.0.0.1`, `4000` |
 | `STORAGE_DIR` | 공개 웹 경로 바깥의 첨부 저장 폴더 절대 경로 |
 | `FFPROBE_PATH` | 필요할 때 지정하는 `ffprobe` 실행 파일 경로 |
+| `FFMPEG_PATH` | 영상 회귀 테스트가 사용하는 `ffmpeg` 경로. 없으면 영상 길이 검사만 건너뜁니다 |
+| `TRUST_PROXY` | 리버스 프록시 뒤에서 실제 접속 주소를 보도록 하는 Express trust-proxy 값(`1`, `true`, `loopback`, 주소 목록) |
 | `NODE_ENV` | HTTPS 운영 환경에서 `production`으로 설정하면 세션 쿠키에 `Secure` 적용 |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | 웹 푸시를 실제 사용할 때 운영자가 지정하는 키와 연락 URI |
+
+로그인 실패는 계정당 15분에 10회, 접속 주소당 300회까지 허용하며 성공한 로그인은 세지 않습니다. 학교처럼 한 공인 IP를 공유하는 환경에서도 한 명의 실패가 다른 사람을 막지 않습니다. 프록시 뒤에서는 `TRUST_PROXY`를 설정해야 주소 단위 제한이 실제 클라이언트를 봅니다.
 
 세션은 PostgreSQL에 저장하고 브라우저에는 HttpOnly·SameSite 쿠키만 제공합니다. 세션은 8시간 후 만료됩니다. 비밀번호 초기화는 학생의 모든 세션을 폐기합니다. 본인 학생과 총괄 교사만 첨부를 읽을 수 있으며 경로를 알아도 권한 검사를 거칩니다.
 

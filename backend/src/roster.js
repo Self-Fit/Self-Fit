@@ -93,7 +93,7 @@ export function rosterRouter(db) {
     await db.$transaction(async tx=>{
       const taken=await tx.rosterImport.updateMany({where:{id:importId,teacherId:req.user.id,consumed:false,expiresAt:{gt:new Date()}},data:{consumed:true}});
       if(!taken.count) fail(409,'IMPORT_EXPIRED','이미 등록되었거나 만료된 명단입니다.');
-      await tx.user.createMany({data:prepared});
+      await tx.user.createMany({data:prepared}).catch(error=>{if(error.code==='P2002') fail(409,'DUPLICATE_NUMBER','검증 이후에 등록된 학번이 있습니다. 파일을 다시 검증해 주세요.');throw error;});
     },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable,timeout:30_000});
     res.status(201).json({created:prepared.length,credentials});
   });

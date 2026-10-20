@@ -43,7 +43,7 @@ try {
     const envPath = path.join(root, 'backend', '.env');
     if (!fs.existsSync(envPath)) {
       const url = `postgresql://self_fit:${encodeURIComponent(password)}@127.0.0.1:${port}`;
-      fs.writeFileSync(envPath, `DATABASE_URL=${url}/self_fit?schema=public\nTEST_DATABASE_URL=${url}/self_fit_test?schema=public\nPORT=4000\nHOST=127.0.0.1\nAPP_ORIGIN=http://localhost:5173,http://127.0.0.1:5173\nSESSION_SECRET=${randomBytes(48).toString('base64url')}\nSTORAGE_DIR=${path.join(root, 'backend', 'storage')}\n`, { mode: 0o600 });
+      fs.writeFileSync(envPath, `DATABASE_URL=${url}/self_fit?schema=public\nTEST_DATABASE_URL=${url}/self_fit_test?schema=public\nPORT=4000\nHOST=127.0.0.1\nAPP_ORIGIN=http://localhost:5173,http://127.0.0.1:5173\nSTORAGE_DIR=${path.join(root, 'backend', 'storage')}\n`, { mode: 0o600 });
     }
     console.log(`Self-Fit 전용 PostgreSQL 실행됨 (127.0.0.1:${port}, self_fit / self_fit_test). 기존 DB와 분리되어 있습니다.`);
   } else throw new Error('사용법: node scripts/db.mjs start|stop|status');

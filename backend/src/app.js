@@ -11,6 +11,8 @@ import { programDto } from './dto.js';
 import { errorHandler } from './errors.js';
 export async function createApp(db,options={}) {
   const app=express();app.disable('x-powered-by');
+  const trustProxy=(process.env.TRUST_PROXY || '').trim();
+  if(trustProxy&&!['false','0'].includes(trustProxy.toLowerCase())) app.set('trust proxy',/^\d+$/.test(trustProxy)?Number(trustProxy):['true','1'].includes(trustProxy.toLowerCase())?true:trustProxy);
   const appOrigin=process.env.APP_ORIGIN || 'http://localhost:5173';
   const allowedOrigins=new Set(appOrigin.split(',').map(value=>value.trim()));
   const storageDir=path.resolve(options.storageDir || process.env.STORAGE_DIR || fileURLToPath(new URL('../../.data/attachments',import.meta.url)));

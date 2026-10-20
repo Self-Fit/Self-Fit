@@ -1,6 +1,6 @@
 import { randomBytes, createHash } from 'node:crypto';
 import { Router } from 'express';
-import { rateLimit } from 'express-rate-limit';
+import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import { fail, requiredText } from './errors.js';
 import { hashPassword, validatePassword, verifyPassword } from './password.js';
 import { userDto } from './dto.js';
@@ -27,8 +27,14 @@ export function requireChangedPassword(req,res,next) {
 export const requireRole = role => (req,res,next) => req.user?.role === role ? next() : next(Object.assign(new Error('접근 권한이 없습니다.'),{status:403,code:'FORBIDDEN'}));
 export function authRouter(db) {
   const router = Router();
-  const loginLimiter = rateLimit({windowMs:15*60*1000,limit:30,standardHeaders:'draft-8',legacyHeaders:false,message:{error:{code:'RATE_LIMITED',message:'로그인 시도가 많습니다. 잠시 후 다시 시도해 주세요.'}}});
-  router.post('/login', loginLimiter, async (req,res) => {
+  // Failed attempts are limited per account so one shared school/NAT address cannot lock
+  // everyone out, plus a looser per-address ceiling against enumeration. Successful logins
+  // never count. Set TRUST_PROXY when the API runs behind a reverse proxy.
+  const limited={error:{code:'RATE_LIMITED',message:'로그인 시도가 많습니다. 잠시 후 다시 시도해 주세요.'}};
+  const common={windowMs:15*60*1000,skipSuccessfulRequests:true,standardHeaders:'draft-8',legacyHeaders:false,message:limited};
+  const accountLimiter=rateLimit({...common,limit:10,keyGenerator:req=>`account:${String(req.body?.studentNumber ?? '').trim().toLowerCase().slice(0,64)}`});
+  const addressLimiter=rateLimit({...common,limit:300,keyGenerator:req=>`address:${ipKeyGenerator(req.ip)}`});
+  router.post('/login', accountLimiter, addressLimiter, async (req,res) => {
     const studentNumber = requiredText(req.body?.studentNumber, '학번', 64);
     const user = await db.user.findUnique({where:{studentNumber}});
     // A real scrypt check also runs for unknown identifiers to reduce account enumeration.

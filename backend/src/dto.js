@@ -1,6 +1,6 @@
 import { WEEKS, activityDates, getWeekForDate, koreanDate, summarizeProgram } from './domain/index.js';
 export function userDto(user) {
-  return Object.fromEntries(['id','role','studentNumber','name','grade','classNumber','targetType','participating','mustChangePassword','lastLoginAt'].map(key=>[key,user[key] ?? null]));
+  return Object.fromEntries(['id','role','studentNumber','name','grade','classNumber','targetType','participating','mustChangePassword','lastLoginAt','createdAt'].map(key=>[key,user[key] ?? null]));
 }
 export function attachmentDto(file) {
   return {id:file.id,name:file.name,kind:file.kind,size:file.size,url:`/api/attachments/${file.id}`,...(file.duration == null ? {} : {duration:file.duration})};

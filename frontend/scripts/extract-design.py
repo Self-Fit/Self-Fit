@@ -60,5 +60,7 @@ for path in sorted(DESIGN.rglob('*.html')):
 (BASE / 'src/design.css').write_text((DESIGN / 'assets/style.css').read_text())
 patterns = {'chevron':'M9.5 5.5', 'back':'M14.5 5.5', 'check':'M5 12.5', 'close':'M6.5 6.5', 'home':'M5 17c2.4', 'chart':'x="3.8" y="5"', 'user':'cx="12" cy="8.3"', 'users':'cx="9" cy="8.5"', 'bell':'M6.2 9.6', 'calendar':'x="3.8" y="5"', 'search':'cx="11" cy="11"', 'plus':'M12 5.5', 'minus':'M5.5 12h13', 'upload':'M12 15V4.5', 'download':'M12 4v10.5', 'lock':'x="5" y="10.2"', 'info':'M12 11v5.2', 'image':'x="3.8" y="4.8"', 'inbox':'M4 13.5 6.4', 'grid':'x="4" y="4" width="6.5"', 'more':'cx="5.5" cy="12"', 'logout':'M14 4.5H7.2', 'video':'x="3.5" y="6.5"', 'edit':'M14.6 5.6', 'refresh':'M19.2 12a7.2', 'history':'M4.8 12a7.2', 'flag':'M5.5 20.5V4.5', 'trophy':'M8 4.5h8v5.2', 'menu':'M4.5 7h15', 'walking':'M7.5 13.5c', 'stretch':'cx="12" cy="4.8"', 'rope':'M7 4v5', 'plank':'cx="18.5" cy="9"', 'squat':'cx="12.5" cy="4.5"', 'stairs':'M4 19.5h4.5', 'dumbbell':'translate(.35,-.25)', 'running':'cx="6" cy="18.5"', 'exercise':'M12 20.5c3.6'}
 icons = {name:next(svg for svg in svg_contents if pattern in svg) for name,pattern in patterns.items()}
+# The design source reuses the calendar glyph for charts; give chart its own bar glyph.
+icons['chart'] = '<path d="M4.5 19.5h15"/><path d="M8 16v-5"/><path d="M12 16V7.5"/><path d="M16 16v-3"/>'
 (BASE / 'src/design-icons.json').write_text(json.dumps(icons, ensure_ascii=False, separators=(',',':')))
 print(f'Preserved {len(templates)} service templates and source design CSS.')

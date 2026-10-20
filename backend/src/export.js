@@ -61,5 +61,6 @@ export async function exportStudents(res,students,filters) {
   const meta=workbook.addWorksheet('추출 정보');
   meta.addRows([['항목','값'],['추출 시각(한국)',new Date().toLocaleString('sv-SE',{timeZone:'Asia/Seoul'})],['기준 운영 연도',2026],['적용 필터',JSON.stringify(filters)],['집계 대상',`${students.filter(user=>user.participating).length}명 (선택 미참여 제외)`],['미입력','미입력은 0·미충족과 구분합니다.'],['걷기 구간','정확한 걸음 수나 합계가 아닙니다. 최저 구간도 실제 0보를 뜻하지 않습니다.'],['누적형','별도의 일일 목표가 없는 운동은 일일 실패를 판정하지 않습니다.'],['정정','승인 전 원기록, 승인 후 승인된 현재값을 사용합니다.'],['첨부','원본 파일은 포함하지 않습니다. 상세 화면에는 로그인이 필요합니다.'],['덤벨','컬·스쿼트·로우 각각 10회×2세트 충족 시 완료일, 5일 중 3일 완료 시 주차 완료. 환산 횟수=완료 세트×10, 좌우를 다시 곱하지 않습니다.']]);
   for(const sheet of [summary,weekly,daily,dumbbell]) sheet.getColumn(1).numFmt='@';
-  await sendWorkbook(res,workbook,`self-fit-2026-${koreanDate()}.xlsx`);
+  summary.getColumn(10).numFmt='0.0%';
+  await sendWorkbook(res,workbook,`self-fit-${koreanDate()}.xlsx`);
 }

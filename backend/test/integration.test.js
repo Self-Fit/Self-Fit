@@ -207,11 +207,15 @@ test('isolated PostgreSQL API integration', {skip:!process.env.TEST_DATABASE_URL
         assert.equal((await request(`/attachments/${first.data.attachment.id}`,{cookie:teacherCookie,raw:true})).status,200);
         assert.equal((await upload(png,'test2.png')).status,201);assert.equal((await upload(png,'test3.png')).status,201);assert.equal((await upload(png,'test4.png')).status,409);
         assert.equal((await upload(Buffer.from('not an image'),'fake.png')).status,415);
-        const video=path.join(temp,'test-long.mp4');
-        await run('ffmpeg',['-hide_banner','-loglevel','error','-f','lavfi','-i','color=c=black:s=16x16:r=1','-t','61','-pix_fmt','yuv420p',video],{timeout:30000});
-        assert.equal((await upload(await readFile(video),'long.mp4')).data.error.code,'VIDEO_TOO_LONG');
-        const validVideo=path.join(temp,'test-short.mp4');await run('ffmpeg',['-hide_banner','-loglevel','error','-f','lavfi','-i','color=c=black:s=16x16:r=1','-t','1','-pix_fmt','yuv420p',validVideo],{timeout:30000});
-        assert.equal((await upload(await readFile(validVideo),'short.mp4')).status,201);
+        const ffmpeg=process.env.FFMPEG_PATH || 'ffmpeg';
+        const ffmpegAvailable=await run(ffmpeg,['-version'],{timeout:10000}).then(()=>true,error=>{if(error.code==='ENOENT') return false;throw error;});
+        if(ffmpegAvailable) {
+          const video=path.join(temp,'test-long.mp4');
+          await run(ffmpeg,['-hide_banner','-loglevel','error','-f','lavfi','-i','color=c=black:s=16x16:r=1','-t','61','-pix_fmt','yuv420p',video],{timeout:30000});
+          assert.equal((await upload(await readFile(video),'long.mp4')).data.error.code,'VIDEO_TOO_LONG');
+          const validVideo=path.join(temp,'test-short.mp4');await run(ffmpeg,['-hide_banner','-loglevel','error','-f','lavfi','-i','color=c=black:s=16x16:r=1','-t','1','-pix_fmt','yuv420p',validVideo],{timeout:30000});
+          assert.equal((await upload(await readFile(validVideo),'short.mp4')).status,201);
+        } else t.diagnostic('ffmpeg not found (set FFMPEG_PATH); video length checks skipped');
         assert.equal((await db.dailyRecord.findUnique({where:{id:saved.data.record.id}})).value,false);
         const initialCount=await db.attachment.count({where:{recordId:saved.data.record.id}});
         const abortRequest=httpRequest(`${origin}/student/records/2026-05-19/attachments`,{method:'POST',headers:{Cookie:aCookie,'Content-Type':'multipart/form-data; boundary=test-abort'}});

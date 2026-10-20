@@ -15,6 +15,7 @@ export function Login({mode='web',teacher=false}){
     const run=async()=>{if(submit.disabled)return;busy=true;refresh();submit.textContent='로그인 중…';root.querySelector('[data-auth-error]')?.remove();try{const {user}=await api('/auth/login',{method:'POST',body:{studentNumber:account.value.trim(),password:password.value}});setUser(user);navigate(`/${mode}${user.mustChangePassword?'/password/setup':user.role==='teacher'?'/admin':''}`,true);}catch(error){showError(root,error,submit);}finally{busy=false;submit.textContent='로그인';refresh();}};
     submit.onclick=run;inputs.forEach(input=>input.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();run();}});
     root.querySelectorAll('.seg button').forEach((tab,index)=>tab.onclick=()=>setRole(index===0?'student':'teacher'));
+    if(!root.querySelector('.seg')){const other=role==='teacher'?'student':'teacher';const link=document.createElement('a');link.href=`/${mode}${other==='teacher'?'/admin':''}/login`;link.className='fs13 fw7';link.style.cssText='display:block;text-align:center;margin-top:16px;text-decoration:underline;color:var(--t2)';link.textContent=other==='teacher'?'교사로 로그인':'학생으로 로그인';link.onclick=event=>{event.preventDefault();setRole(other);navigate(link.getAttribute('href'),true);};(root.querySelector('.help.center')||submit).after(link);}
   },[mode,role,setUser]);
   return <DesignTemplate {...{id,setup}}/>;
 }
@@ -29,7 +30,7 @@ export function PasswordChange({mode='web',first=false}){
     const valid=()=>password.value.length>=8&&password.value.length<=128&&/[A-Za-z]/.test(password.value)&&/[0-9]/.test(password.value)&&password.value!==user.studentNumber;
     const refresh=()=>{const checks=[password.value.length>=8,/[A-Za-z]/.test(password.value)&&/[0-9]/.test(password.value),password.value.length>0&&password.value!==user.studentNumber];help.forEach((element,index)=>{element.classList.toggle('ok',checks[index]);element.classList.remove('err');});button.disabled=busy||!valid()||password.value!==confirmation.value||(!first&&!current.value);button.classList.toggle('disabled',button.disabled);};inputs.forEach(input=>input.addEventListener('input',refresh));refresh();
     const run=async()=>{if(button.disabled)return;busy=true;refresh();root.querySelector('[data-auth-error]')?.remove();try{const {user:updated}=await api('/auth/change-password',{method:'POST',body:{newPassword:password.value,...(first?{}:{currentPassword:current.value})}});setUser(updated);navigate(`/${mode}${updated.role==='teacher'?'/admin':first?'':'/me'}`,true);}catch(error){showError(root,error,button.closest('.bottom-bar')||button);}finally{busy=false;refresh();}};button.onclick=run;inputs.forEach(input=>input.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();run();}});
-    const back=root.querySelector('[aria-label="뒤로"]');if(back)back.onclick=async()=>{if(first){await api('/auth/logout',{method:'POST',body:{}});setUser(null);navigate(`/${mode}/login`,true);}else navigate(`/${mode}/me`);};
-  },[mode,first,user.studentNumber,setUser]);
+    const back=root.querySelector('[aria-label="뒤로"]');if(back)back.onclick=async()=>{if(first){await api('/auth/logout',{method:'POST',body:{}});setUser(null);navigate(`/${mode}/login`,true);}else navigate(`/${mode}${user.role==='teacher'?'/admin/more':'/me'}`);};
+  },[mode,first,user.studentNumber,user.role,setUser]);
   return <DesignTemplate {...{id,setup}}/>;
 }
