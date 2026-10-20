@@ -1,5 +1,5 @@
 import React,{useEffect} from 'react';
-import {useResource,useSession,AppFrame,ErrorNotice,Loading} from './shared';
+import {useResource,useSession,AppFrame,ErrorNotice,Loading,EmptyState} from './shared';
 import {StudentPage} from './student-ui';
 import {HomeScreen,RecordsScreen,SettingsScreen,NotificationsScreen,EnrollmentScreen,CorrectionsScreen} from './student-screens';
 import RecordPage from './student-record';
@@ -13,6 +13,9 @@ export default function StudentApp({mode,user,onLogout,path}) {
   if(dashboard.error)return <AppFrame {...{mode,user,onLogout}}><StudentPage mode={mode}><ErrorNotice error={dashboard.error} retry={dashboard.refresh}/></StudentPage></AppFrame>;
   if(!dashboard.data)return <AppFrame {...{mode,user,onLogout}}><StudentPage mode={mode}><Loading/></StudentPage></AppFrame>;
   const data=dashboard.data;
+  // Since the challenge backend, a student with no current challenge gets program:null.
+  // Only account screens and notifications work without one.
+  if(!data.program&&!['/me','/settings','/install','/logout','/notifications'].includes(route))return <AppFrame {...{mode,user,onLogout}}><StudentPage mode={mode} title="챌린지"><div className="card"><EmptyState title="지금 참여 중인 챌린지가 없어요.">선생님이 챌린지에 등록하거나 초대하면 알림으로 알려 드려요.</EmptyState></div></StudentPage></AppFrame>;
   if(['/me','/settings','/install','/logout'].includes(route))return <SettingsScreen {...{mode,data,onLogout}} settingsOnly={route==='/settings'} install={mode==='mobile'&&route==='/install'} logout={mode==='mobile'&&route==='/logout'}/>;
   if(route==='/notifications')return <NotificationsScreen {...{mode,data,onLogout}}/>;
   if(route==='/corrections')return <CorrectionsScreen {...{mode,data,onLogout}}/>;

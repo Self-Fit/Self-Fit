@@ -10,7 +10,7 @@ import path from 'node:path';
 import { createServer } from 'vite';
 import { createApp } from '../backend/src/app.js';
 import { hashPassword } from '../backend/src/password.js';
-import { WEEKS, activityDates } from '../backend/src/domain/index.js';
+import { LEGACY_WEEKS, activityDates } from '../backend/src/domain/index.js';
 const run=promisify(execFile),require=createRequire(import.meta.url);
 if(!process.env.TEST_DATABASE_URL)throw new Error('TEST_DATABASE_URL required');
 const url=new URL(process.env.TEST_DATABASE_URL);
@@ -25,14 +25,19 @@ async function cleanup(){if(cleaning)return;cleaning=true;await vite?.close();if
 try {
   await run(process.execPath,[require.resolve('prisma/build/index.js'),'migrate','deploy'],{cwd:path.resolve('backend'),env:{...process.env,DATABASE_URL:url.toString()}});
   db=new PrismaClient({datasourceUrl:url.toString()});
+  // The challenges migration creates the legacy challenge; records and memberships belong to it.
+  const legacy='challenge-2026-self-fit';
   const passwordHash=await hashPassword('QaOnly1234!');
   await db.user.create({data:{role:'teacher',studentNumber:'qa-teacher',name:'검증 교사',passwordHash,mustChangePassword:false}});
   const student=await db.user.create({data:{role:'student',studentNumber:'qa-student',name:'검증 학생',grade:2,classNumber:3,targetType:'required',participating:true,passwordHash,mustChangePassword:false}});
   const second=await db.user.create({data:{role:'student',studentNumber:'qa-zero',name:'기록 구분 검증',grade:1,classNumber:1,targetType:'required',participating:true,passwordHash,mustChangePassword:false}});
-  for(const week of WEEKS.filter(w=>!w.deferred))for(const date of activityDates(week).slice(0,5))await db.dailyRecord.create({data:{userId:student.id,date,value:week.inputType==='walking'?5:week.inputType==='check'?true:week.inputType==='dumbbell'?Object.fromEntries(week.exercises.map(exercise=>[exercise.id,exercise.targetSets])):week.weeklyTarget/5}});
-  await db.dailyRecord.create({data:{userId:second.id,date:'2026-06-08',value:0}});
-  await db.dailyRecord.create({data:{userId:second.id,date:'2026-05-04',value:0}});
-  await db.dailyRecord.create({data:{userId:second.id,date:'2026-06-01',value:false}});
+  for(const user of [student,second])await db.challengeMembership.create({data:{challengeId:legacy,userId:user.id,mode:'forced',status:'active'}});
+  // A student with no current challenge (dashboard program:null).
+  await db.user.create({data:{role:'student',studentNumber:'qa-optional',name:'미참여 검증',grade:1,classNumber:2,targetType:'optional',participating:false,passwordHash,mustChangePassword:false}});
+  for(const week of LEGACY_WEEKS.filter(w=>!w.deferred))for(const date of activityDates(LEGACY_WEEKS,week).slice(0,5))await db.dailyRecord.create({data:{challengeId:legacy,userId:student.id,date,value:week.inputType==='walking'?5:week.inputType==='check'?true:week.inputType==='dumbbell'?Object.fromEntries(week.exercises.map(exercise=>[exercise.id,exercise.targetSets])):week.weeklyTarget/5}});
+  await db.dailyRecord.create({data:{challengeId:legacy,userId:second.id,date:'2026-06-08',value:0}});
+  await db.dailyRecord.create({data:{challengeId:legacy,userId:second.id,date:'2026-05-04',value:0}});
+  await db.dailyRecord.create({data:{challengeId:legacy,userId:second.id,date:'2026-06-01',value:false}});
   process.env.APP_ORIGIN='http://127.0.0.1:5178';
   apiServer=(await createApp(db,{storageDir:temporary})).listen(4001,'127.0.0.1');
   await new Promise(resolve=>apiServer.once('listening',resolve));
