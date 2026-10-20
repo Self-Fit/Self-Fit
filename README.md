@@ -41,6 +41,17 @@ npm run bootstrap-teacher --workspace backend
 
 별도 덤벨 자료는 `backend/scripts/import-dumbbell-data.js`로 기존 194명에게 연결합니다. `backend/`에서 `node --env-file=.env scripts/import-dumbbell-data.js ../.local/imports/2026-10-20-dumbbell/source.json --dry-run`으로 확인하며, `--apply`일 때만 추가합니다. 5일×3종목의 원본을 모두 보관하고 하나라도 입력한 날짜만 기록으로 생성합니다. 같은 원본을 다시 실행하면 저장값을 대조하고 종료하며, 기존 날짜와 충돌하면 덮어쓰지 않고 중단합니다.
 
+12주 전체를 다시 작성한 수정 자료는 `backend/scripts/import-revised-participation.js`로 갱신합니다. `scripts/extract-participation.py`로 원본 엑셀을 프로젝트 내부 `.local/imports/<작업 폴더>/`에 추출하고, 같은 폴더에 DB 백업과 백업 검증 정보를 준비한 뒤 실행합니다. 원본 행과 수식·계산 캐시를 보관하고 실제 앱 규칙으로 학생별·대상별·주차별 완료 수를 대조합니다. 기본 실행은 읽기 전용 미리보기이며 `--apply`를 명시할 때만 반영합니다.
+
+수정 적재는 기존 계정·비밀번호·세션과 이전 원본을 보존합니다. 같은 학생·날짜의 기록은 기존 ID를 유지하고, 추가 입력일을 생성하며 수정본에서 빈 날짜가 된 기존 가상 기록은 제거합니다. 변경 전 기록과 출처는 새 원본의 변경 이력에 보관합니다. 사용자 수정·정정 요청·첨부와 충돌하면 반영을 중단합니다. 같은 파일 재실행은 저장 결과를 확인하고 종료합니다. 원본 파일·DB 백업·실제 체력 자료는 GitHub에 업로드하지 않습니다.
+
+```sh
+node --env-file=backend/.env backend/scripts/import-revised-participation.js ".local/imports/<작업 폴더>/source.json" --dry-run
+node --env-file=backend/.env backend/scripts/import-revised-participation.js ".local/imports/<작업 폴더>/source.json" --apply
+```
+
+적용 전 같은 폴더의 `before-revision.dump`와 `backup-manifest.json`이 필요합니다. 백업 정보에는 `backupFile`, `backupSha256`, `database`, `users`, `records`, `sourceDatasetHashes`, `protectedRelations`를 기록합니다. 마지막 필드는 `corrections`, `revisions`, `attachments` 건수이며 모두 0이어야 합니다. CLI는 백업 파일 해시를 확인하고, 트랜잭션 안에서 현재 DB와 백업 시점의 계정·기록 수 및 원본 목록을 다시 비교합니다. 이 갱신 도구는 기존 최초 참여 자료와 덤벨 적재를 수정하기 위한 도구이며, 이미 다른 수정본을 반영한 DB는 임의로 다시 덮어쓰지 않습니다.
+
 ## 구성과 데이터
 
 - `frontend/src/design.css`: 기존 시안 CSS. `design-templates.json`은 `docs/디자인`의 내부 서비스 화면에서 추출합니다.
