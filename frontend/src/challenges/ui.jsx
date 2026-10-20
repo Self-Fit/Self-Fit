@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Icon } from '../shared.jsx';
+import { Icon, navigate } from '../shared.jsx';
 import { dateText } from '../student-utils.js';
 import { usingMock } from './index.js';
 
@@ -66,4 +66,11 @@ export function FormField({ label, error, hint, children, className = '', hideLa
     {children}
     {error ? <span className="help err" role="alert"><Icon name="info" size={14} />{error}</span> : hint ? <span className="help">{hint}</span> : null}
   </label>;
+}
+
+/** 구성 / 참여자 tabs on a saved challenge (web). */
+export function ChallengeTabs({ id, current, memberCount }) {
+  const base = `/web/admin/challenges/${encodeURIComponent(id)}`;
+  const tabs = [['setup', '구성', base], ['members', `참여자${memberCount === undefined ? '' : ` ${memberCount}`}`, `${base}/members`]];
+  return <nav className="ch-tabs" aria-label="챌린지 화면">{tabs.map(([key, label, href]) => <a key={key} href={href} className={current === key ? 'on' : ''} aria-current={current === key ? 'page' : undefined} onClick={event => { event.preventDefault(); if (current !== key) navigate(href); }}>{label}</a>)}</nav>;
 }

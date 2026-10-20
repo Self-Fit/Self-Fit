@@ -2,11 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorNotice, Icon, Loading, Modal, navigate } from '../shared.jsx';
 import { dateText } from '../student-utils.js';
 import { archiveChallenge, createChallenge, deleteChallenge, getChallenge, publishChallenge, updateChallenge } from './index.js';
-import { FormField, MockNotice, PhaseChip, periodText, useAction, useFeedback, useLoad } from './ui.jsx';
+import { ChallengeTabs, FormField, MockNotice, PhaseChip, periodText, useAction, useFeedback, useLoad } from './ui.jsx';
 import { challengeToForm, emptyForm, errorMap, toBody } from './form.js';
 import { addDays, daysBetween, isDate, shiftWeeks, validateChallenge } from './validate.js';
 import WeekEditor from './WeekEditor.jsx';
 import ChallengeDetail from './ChallengeDetail.jsx';
+import MobileMembers from './MobileMembers.jsx';
 
 const LIST = '/web/admin/challenges';
 const fullDate = date => isDate(date) ? `${date.slice(0, 4)}년 ${dateText(date)}` : '—';
@@ -73,11 +74,12 @@ export default function ChallengeEditor({ mode, id }) {
 
   if (result.loading && !challenge && !isNew) return <Loading />;
   if (result.error && !challenge) return <div className="ch-page"><BackLink /><div className="mt16"><ErrorNotice error={result.error} retry={result.refresh} /></div></div>;
-  if (mode === 'mobile') return challenge ? <ChallengeDetail {...{ challenge, mode }} /> : <div className="ch-page"><p className="fs14 t2">챌린지 등록은 PC에서 할 수 있어요.</p></div>;
+  if (mode === 'mobile') return challenge ? <ChallengeDetail {...{ challenge, mode }}><MobileMembers challenge={challenge} /></ChallengeDetail> : <div className="ch-page"><p className="fs14 t2">챌린지 등록은 PC에서 할 수 있어요.</p></div>;
   if (!form) return <Loading />;
 
   const lock = lockFor(challenge);
-  if (lock === 'all') return <><BackLink /><div className="mt16"><MockNotice /></div><div className="banner line mt16"><Icon name="info" />보관된 챌린지는 수정할 수 없어요. 양식으로 불러와 새 챌린지를 만들 수 있어요.</div><div className="mt20"><ChallengeDetail {...{ challenge, mode }} /></div>{feedback}</>;
+  const memberCount = challenge ? challenge.counts.active + challenge.counts.pending : undefined;
+  if (lock === 'all') return <><BackLink /><div className="mt12"><ChallengeTabs id={id} current="setup" memberCount={memberCount} /></div><div className="mt16"><MockNotice /></div><div className="banner line mt16"><Icon name="info" />보관된 챌린지는 수정할 수 없어요. 양식으로 불러와 새 챌린지를 만들 수 있어요.</div><div className="mt20"><ChallengeDetail {...{ challenge, mode }} /></div>{feedback}</>;
 
   const editingStructure = lock === 'none';
   const set = patch => setForm(old => ({ ...old, ...patch }));
@@ -133,6 +135,7 @@ export default function ChallengeEditor({ mode, id }) {
         {challenge.lifecycle === 'draft' && <button type="button" className="btn primary" disabled={busy || dirty} title={dirty ? '저장한 뒤 게시할 수 있어요.' : undefined} onClick={() => setDialog('publish')}><Icon name="flag" size={18} />게시</button>}
       </div>}
     </div>
+    {challenge && <ChallengeTabs id={id} current="setup" memberCount={memberCount} />}
     <div className="stack gap12 mt16">
       <MockNotice />
       {from === 'template' && challenge?.lifecycle === 'draft' && <div className="banner g"><Icon name="history" /><span>양식에서 복사한 초안이에요. 주차 날짜를 새 시작일에 맞춰 옮겼어요. 내용을 확인한 뒤 게시하세요.</span></div>}

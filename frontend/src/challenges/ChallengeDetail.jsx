@@ -18,7 +18,6 @@ export default function ChallengeDetail({ challenge, mode, children }) {
       <div><span>주차</span><b>{challenge.weekCount}개</b></div>
       <div><span>참여</span><b>확정 {counts.active ?? 0}명 · 대기 {counts.pending ?? 0}명 · 거절 {counts.declined ?? 0}명</b></div>
     </div>
-    {children}
     <h2 className="fs16 fw8 mt24">주차 구성</h2>
     <div className="list mt12">{challenge.weeks.map(week => <div className="li ch-detail-week" key={week.id || week.week}>
       <span className="ch-dot" style={{ background: week.color }} aria-hidden="true" />
@@ -28,6 +27,7 @@ export default function ChallengeDetail({ challenge, mode, children }) {
         {week.inputType === 'dumbbell' && week.exercises?.length > 0 && <div className="sub">{week.exercises.map(exercise => `${exercise.title} ${exercise.repetitions}회×${exercise.targetSets}세트`).join(', ')}</div>}
       </div>
     </div>)}</div>
-    {!web && <div className="help mt16 ch-center"><Icon name="info" size={14} />챌린지 수정은 PC에서 할 수 있어요.</div>}
+    {children}
+    {!web && <div className="help mt16 ch-center"><Icon name="info" size={14} />챌린지 수정과 학생 등록·초대는 PC에서 할 수 있어요.</div>}
   </div>;
 }

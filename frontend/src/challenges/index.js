@@ -12,3 +12,15 @@ export const updateChallenge = call('updateChallenge');
 export const publishChallenge = call('publishChallenge');
 export const archiveChallenge = call('archiveChallenge');
 export const deleteChallenge = call('deleteChallenge');
+
+export const listMembers = call('listMembers');
+export const previewMembers = call('previewMembers');
+export const addMembers = call('addMembers');
+export const removeMember = call('removeMember');
+export const listStudents = call('listStudents');
+
+export const listMyChallenges = call('listMyChallenges');
+export const acceptInvitation = call('acceptInvitation');
+export const declineInvitation = call('declineInvitation');
+export const getStudentChallenge = call('getStudentChallenge');
+export const getChallengeDashboard = call('getChallengeDashboard');

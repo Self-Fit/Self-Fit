@@ -96,3 +96,70 @@
   .ch-basic-grid,.ch-week-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .ch-week-foot .ch-color{grid-column:1/-1}
 }
+
+/* Phase 2: tabs and members */
+.ch-tabs{display:flex;gap:4px;margin-top:20px;border-bottom:1px solid var(--line)}
+.ch-tabs a{padding:10px 14px;font-size:14px;font-weight:700;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px}
+.ch-tabs a.on{color:var(--t1);border-bottom-color:var(--g)}
+.ch-tabs a:hover{color:var(--t1)}
+.ch-stats .stat{padding:16px 20px}
+.ch-stats .v{font-size:24px;font-variant-numeric:tabular-nums}
+.ch-stats .v.g{color:var(--g-deep)}
+.ch-mini-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:#fff;border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden}
+.ch-mini-stats>div{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 2px;border-right:1px solid var(--line)}
+.ch-mini-stats>div:last-child{border-right:0}
+.ch-mini-stats span{font-size:10px;color:var(--t3);font-weight:700;white-space:nowrap}
+.ch-mini-stats b{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums}
+.ch-member-li{padding:12px 16px;min-height:0}
+.ch-chip-stack{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.ch-filter-select select{height:44px;min-width:110px;border-radius:14px}
+.ch-row-actions{justify-content:flex-end;flex-wrap:nowrap}
+.ch-danger{color:var(--red)}
+.ch-danger:hover{background:var(--red-soft)}
+
+/* Add members dialog */
+.ch-steps{display:flex;gap:6px;list-style:none;font-size:12px;font-weight:700;color:var(--t3)}
+.ch-steps li{display:flex;align-items:center;gap:6px}
+.ch-steps li+li::before{content:'';width:16px;height:1px;background:var(--line-2)}
+.ch-steps span{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:var(--sunken);font-size:11px}
+.ch-steps li.on{color:var(--t1)}
+.ch-steps li.on span{background:var(--g);color:#fff}
+.ch-steps li.done span{background:var(--g-soft);color:var(--g-deep)}
+.ch-filter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.ch-search{width:100%}
+.ch-pick-list,.ch-preview-list{max-height:220px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--r-md);background:#fff}
+.ch-pick,.ch-preview{display:grid;grid-template-columns:20px minmax(0,1fr) 56px 76px auto;align-items:center;gap:10px;width:100%;padding:10px 14px;border-bottom:1px solid var(--line);font:inherit;font-size:13px;text-align:left}
+.ch-preview{grid-template-columns:minmax(0,1fr) 56px 76px auto}
+.ch-pick:last-child,.ch-preview:last-child{border-bottom:0}
+.ch-pick:hover{background:#FAFBFB}
+.ch-pick.on{background:#F3FAF6}
+.ch-preview.is-busy{color:var(--t4)}
+.ch-preview.is-busy b{color:var(--t3)}
+.ch-pad{padding:14px}
+.ch-option{display:flex;align-items:flex-start;gap:12px;width:100%;padding:16px;border:1.5px solid var(--line-2);border-radius:var(--r-md);background:#fff;text-align:left;font:inherit}
+.ch-option b{display:block;font-size:15px}
+.ch-option span>span{display:block;font-size:13px;color:var(--t2);margin-top:4px;line-height:1.5}
+.ch-option .cbx{margin-top:2px;border-radius:50%}
+.ch-option.on{border-color:var(--g);background:#F6FBF8}
+.ch-option:disabled{opacity:.5;cursor:default}
+.ch-option .warn-text{color:var(--warn)}
+.ch-skip{display:flex;gap:8px;align-items:flex-start}
+.ch-skip .chip{flex-shrink:0}
+
+/* Student: MyChallenges and template inserts */
+.ch-invite-title{font-size:18px;font-weight:800;letter-spacing:-.02em;margin-top:10px}
+.ch-invite.is-closed{opacity:.75}
+.ch-invite .kv b{font-size:13px}
+.ch-toggle{margin-left:-10px;color:var(--t2)}
+.ch-student-weeks{list-style:none}
+.ch-student-weeks .li{padding:10px 14px;min-height:0;align-items:flex-start}
+.ch-student-weeks .li .k{font-size:14px}
+.ch-mine{padding:14px 18px}
+.ch-switch{display:flex;flex-direction:column;gap:8px}
+.ch-invite-banner{align-items:center;margin-bottom:20px}
+.mobile-app .ch-invite-banner{margin-bottom:0}
+.ch-invite-banner:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.ch-entry{display:flex;align-items:center;gap:12px}
+.ch-entry-select{height:40px;border:1px solid var(--line-2);border-radius:12px;padding:0 10px;font:inherit;font-size:14px;max-width:240px}
+.ch-entry-value{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mobile-app .ch-invite-hint{display:none}
