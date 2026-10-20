@@ -1,0 +1,14 @@
+{
+  "INVALID_CHALLENGE": {
+    "status": 400,
+    "body": { "error": { "code": "INVALID_CHALLENGE", "message": "챌린지 구성을 확인해 주세요.", "details": [
+      { "path": "weeks[1].startDate", "message": "앞 주차와 기간이 겹칩니다." },
+      { "path": "weeks[2].exercises[0].id", "message": "운동 식별값은 영문 대문자·숫자·밑줄 2~20자여야 합니다." }
+    ] } }
+  },
+  "CHALLENGE_LOCKED": { "status": 409, "body": { "error": { "code": "CHALLENGE_LOCKED", "message": "시작된 챌린지의 주차와 날짜는 바꿀 수 없습니다." } } },
+  "INVITATION_CLOSED": { "status": 409, "body": { "error": { "code": "INVITATION_CLOSED", "message": "초대 수락 기간이 지났습니다." } } },
+  "ENROLLMENT_CLOSED": { "status": 409, "body": { "error": { "code": "ENROLLMENT_CLOSED", "message": "참여 등록 기간이 지났습니다." } } },
+  "NOT_MEMBER": { "status": 403, "body": { "error": { "code": "NOT_MEMBER", "message": "이 챌린지의 참여자가 아닙니다." } } },
+  "HAS_RECORDS": { "status": 409, "body": { "error": { "code": "HAS_RECORDS", "message": "운동 기록이 있는 참여자는 제외할 수 없습니다." } } }
+}

@@ -1,0 +1,140 @@
+# 챌린지 API 계약
+
+Base `/api`. 인증·오류·날짜 규칙은 [backend/API.md](../../backend/API.md)와 같다: 세션 쿠키, `{error:{code,message,details?}}`, 활동 날짜는 한국 `YYYY-MM-DD`, 시각은 ISO.
+이 문서의 모든 예시 응답은 [fixtures/](./fixtures/)에 JSON으로 있다. **FE mock과 BE 테스트는 같은 파일을 읽는다.**
+
+## 공통 타입
+
+```
+ChallengeSummary = {
+  id, title, description, year,
+  lifecycle: 'draft'|'published'|'archived',
+  phase: 'draft'|'upcoming'|'active'|'rest'|'ended'|'archived',   // 서버가 한국 날짜로 계산
+  startDate, endDate, enrollmentDeadline, today,
+  weekCount, sourceChallengeId: null|id,
+  counts: { active, pending, declined, forced, invited },         // 참여 통계
+  createdAt, updatedAt
+}
+Challenge = ChallengeSummary & { weeks: [Week], activityDates: ['YYYY-MM-DD', ...] }
+Week = {
+  id, week,                       // week: 1부터, 배열 순서
+  title, startDate, endDate,
+  inputType: 'walking'|'check'|'count'|'distance'|'dumbbell',
+  weeklyTarget, dailyTarget: number|null, unit, dailyUnit: string|null,
+  color, description,
+  exercises?: [{ id, title, repetitions, targetSets, sideRule }]   // dumbbell만
+}
+WeekInput = Week에서 id, week를 뺀 것 (순서가 주차 번호)
+Membership = {
+  id, challengeId,
+  user: User,                     // 교사 응답에만. 학생 응답은 user 없음
+  mode: 'forced'|'invited', status: 'active'|'pending'|'declined'|'removed',
+  invitedAt, respondedAt: null|ISO, invitedBy: { id, name }
+}
+MembershipSelf = { mode, status, invitedAt, respondedAt }
+```
+
+`User`, `Record`, `Correction`, `WeekSummary`, `Summary`는 기존 API.md 정의 그대로.
+
+## 주차 검증 규칙 (`400 INVALID_CHALLENGE`, `details:[{path,message}]`)
+- `title` 1–60자, `description` 0–500자, `startDate <= endDate`, 기간 최대 365일, `enrollmentDeadline`은 `startDate` 전날 이하가 기본이며 `endDate` 이하까지 허용.
+- `weeks` 1–20개. 각 주차는 `startDate <= endDate`, 챌린지 기간 안, 배열 순서대로 날짜가 오름차순이고 **겹치지 않음**(주차 사이 빈 날짜는 휴식).
+- `inputType`별:
+  - `walking`: `weeklyTarget` 1–7(일), `dailyTarget` 무시(null로 저장), `unit`='일'. 구간 값(0–5)은 기존 규칙 그대로.
+  - `check`: `weeklyTarget` 1–7(일), `dailyTarget` 숫자|null(설명용), `dailyUnit` 선택, `unit`='일'.
+  - `count`: `weeklyTarget` 정수 ≥1, `dailyTarget` 정수|null, `unit` 필수(예 '회').
+  - `distance`: `weeklyTarget` > 0, `dailyTarget` >0|null, `unit` 필수(예 'km').
+  - `dumbbell`: `weeklyTarget` 1–7(일), `exercises` 1–5개, `id`는 `^[A-Z0-9_]{2,20}$`이며 챌린지 안에서 유일, `repetitions`·`targetSets` 정수 ≥1.
+- `color`는 `#RRGGBB`.
+- 기록 값 검증(`validateValue`)과 완료 판정은 기존 도메인 규칙을 주차 정의에 따라 적용한다.
+
+## 교사 API (`role = teacher`)
+
+| 메서드·경로 | 요청 | 응답 | 오류 |
+| --- | --- | --- | --- |
+| `GET /teacher/challenges?lifecycle=all\|draft\|published\|archived` | 기본 `all` | `{challenges:[ChallengeSummary]}` startDate 내림차순 | |
+| `POST /teacher/challenges` | `{title, description?, startDate, endDate?, enrollmentDeadline?, weeks:[WeekInput]}` `endDate` 생략 시 마지막 주차 endDate | `201 {challenge}` lifecycle=draft | `400 INVALID_CHALLENGE` |
+| `POST /teacher/challenges/:id/duplicate` | `{title?, startDate}` 제목 기본 `"<원본 제목> (복사)"` | `201 {challenge}` draft, 주차 날짜는 평행 이동 | `404 CHALLENGE_NOT_FOUND` |
+| `GET /teacher/challenges/:id` | | `{challenge}` | `404` |
+| `PATCH /teacher/challenges/:id` | `{title?, description?, startDate?, endDate?, enrollmentDeadline?, weeks?}` | `{challenge}` | `400 INVALID_CHALLENGE`, `409 CHALLENGE_LOCKED`(시작 후 weeks/날짜 변경), `409 CHALLENGE_ARCHIVED` |
+| `POST /teacher/challenges/:id/publish` | `{}` | `{challenge}` lifecycle=published | `400 INVALID_CHALLENGE`, `409 ALREADY_PUBLISHED` |
+| `POST /teacher/challenges/:id/archive` | `{}` | `{challenge}` | `409 CHALLENGE_NOT_PUBLISHED` |
+| `DELETE /teacher/challenges/:id` | | `{ok:true}` | `409 CHALLENGE_NOT_DRAFT` |
+| `GET /teacher/challenges/:id/members?status=&mode=&grade=&classNumber=&targetType=&search=` | 필터는 모두 선택. `status` 기본 `active,pending,declined`(removed 제외) | `{members:[Membership], stats:{active,pending,declined,removed,forced,invited}}` | |
+| `POST /teacher/challenges/:id/members/preview` | `{studentIds?:[id], filters?:{grade?,classNumber?,targetType?}}` 둘 중 하나 | `{students:[User & {membership:null\|MembershipSelf}]}` 아무것도 쓰지 않음 | `400 INVALID_SELECTION` |
+| `POST /teacher/challenges/:id/members` | `{mode:'forced'\|'invited', studentIds?:[id], filters?:{…}}` | `201 {added:[Membership], skipped:[{userId,studentNumber,name,reason}]}` | `409 CHALLENGE_NOT_PUBLISHED`, `409 ENROLLMENT_CLOSED`(초대인데 마감 지남 / 강제인데 endDate 지남) |
+| `DELETE /teacher/challenges/:id/members/:userId` | | `{ok:true}` status=removed | `404 NOT_MEMBER`, `409 HAS_RECORDS` |
+
+`POST …/members` 규칙(학생 1명 단위, 전체는 한 트랜잭션):
+- 참여 없음 → 생성. `forced`면 `active`, `invited`면 `pending`.
+- `pending` + `forced` 요청 → mode=forced, status=active (강제 전환). `pending` + `invited` → `skipped: already_pending`.
+- `declined` + `invited` → `pending`으로 재초대(invitedAt 갱신). `declined` + `forced` → forced/active.
+- `active` → `skipped: already_active`. `removed` → 다시 생성 규칙 적용. 존재하지 않는 학생 → `skipped: not_found`. 교사 id → `skipped: not_student`.
+- 초대 생성·재초대마다 학생 알림 `type:'invitation'` 1건(`eventKey: invitation:<membershipId>:<invitedAt>`), 강제 등록은 `type:'enrollment'` 알림 1건.
+
+### 기존 교사 API에 추가되는 `challengeId`
+`GET /teacher/overview`, `/teacher/participation`, `/teacher/export`, `/teacher/corrections`, `/teacher/students/:id`에 `challengeId` 쿼리를 추가한다.
+생략하면 "현재 챌린지"(README §5). 응답에 `challenge: ChallengeSummary`를 포함한다. 분모·`participating` 표기는 그 챌린지의 `active` 참여자다.
+`/teacher/students`(명단)는 챌린지와 무관하다.
+
+## 학생 API (`role = student`)
+
+| 메서드·경로 | 요청 | 응답 | 오류 |
+| --- | --- | --- | --- |
+| `GET /student/challenges` | | `{current: null\|{challenge:ChallengeSummary, membership:MembershipSelf}, challenges:[{challenge, membership}], invitations:[{challenge, membership}]}` `invitations`는 `pending`이고 마감 전인 것만 | |
+| `POST /student/challenges/:id/accept` | `{}` | `{membership:MembershipSelf}` status=active | `404 NO_INVITATION`, `409 INVITATION_CLOSED` |
+| `POST /student/challenges/:id/decline` | `{}` | `{membership}` status=declined | `404 NO_INVITATION` |
+| `GET /student/challenges/:id` | | `{challenge}` (published만) | `404` |
+| `GET /student/challenges/:id/dashboard` | | `{user, challenge, membership, summary, records, unreadCount}` 기존 `/student/dashboard`에서 `program` → `challenge` | `403 NOT_MEMBER`(active 아님) |
+| `GET /student/challenges/:id/records` | | `{records, summary}` | `403 NOT_MEMBER` |
+| `GET /student/challenges/:id/records/:date` | | 기존 `/student/records/:date`와 동일 | |
+| `PUT /student/challenges/:id/records/:date` | 기존과 동일 | 기존과 동일 | 기존 코드 + `403 NOT_MEMBER` |
+| `POST /student/challenges/:id/records/:date/corrections` | 기존과 동일 | | |
+| `POST /student/challenges/:id/records/:date/attachments`, `DELETE …/attachments/:aid` | 기존과 동일 | | |
+| `GET /student/corrections`, `/student/notifications*`, `/student/settings*`, `/student/push-subscriptions` | 변경 없음(계정 단위). `Correction`에 `challengeId` 필드 추가 | | |
+
+레거시 경로 `GET /student/dashboard`, `/student/records*`, `/program`, `POST /student/enroll`은 phase 3까지 유지하며 "현재 챌린지"로 해석한다.
+`/student/enroll`은 현재 챌린지에 `pending` 초대가 있으면 `accept`와 같고, 없으면 기존처럼 `403 ENROLLMENT_CLOSED`.
+`/program` 응답에는 `challengeId`가 추가된다.
+
+알림 `Notification`에 `data: null|{challengeId, membershipId}`가 추가된다(초대·등록 알림만 값이 있음).
+
+## 오류 코드 모음
+| 코드 | 상태 | 뜻 |
+| --- | --- | --- |
+| `CHALLENGE_NOT_FOUND` | 404 | 없는 챌린지, 또는 학생이 draft를 조회 |
+| `INVALID_CHALLENGE` | 400 | 검증 실패. `details:[{path:'weeks[2].endDate', message}]` |
+| `CHALLENGE_LOCKED` | 409 | 시작 후 주차/날짜 수정 |
+| `CHALLENGE_NOT_DRAFT` / `ALREADY_PUBLISHED` / `CHALLENGE_NOT_PUBLISHED` / `CHALLENGE_ARCHIVED` | 409 | 상태 전이 위반 |
+| `INVALID_SELECTION` | 400 | `studentIds`도 `filters`도 없거나 둘 다 있음, 100,000자 초과 |
+| `ENROLLMENT_CLOSED` | 409 | 초대 마감/종료 후 등록 시도 |
+| `INVITATION_CLOSED` | 409 | 학생이 마감 후 수락 |
+| `NO_INVITATION` | 404 | 대기 중 초대 없음 |
+| `NOT_MEMBER` | 403 | active 참여자가 아닌 학생의 기록 접근 |
+| `HAS_RECORDS` | 409 | 기록이 있는 참여자 제외 |
+
+## 예시
+
+### 챌린지 생성 요청
+```json
+{
+  "title": "2027 봄 챌린지",
+  "description": "3월 한 달, 매주 운동 하나",
+  "startDate": "2027-03-02",
+  "enrollmentDeadline": "2027-03-01",
+  "weeks": [
+    { "title": "만보 걷기", "startDate": "2027-03-02", "endDate": "2027-03-08", "inputType": "walking", "weeklyTarget": 5, "dailyTarget": null, "unit": "일", "dailyUnit": "보", "color": "#E07A2E", "description": "하루 10,000보 이상, 기준을 충족한 5일" },
+    { "title": "줄넘기", "startDate": "2027-03-09", "endDate": "2027-03-15", "inputType": "count", "weeklyTarget": 1000, "dailyTarget": 200, "unit": "회", "dailyUnit": "회", "color": "#2F7FD8", "description": "하루 200회, 주간 합계 1,000회 이상" },
+    { "title": "덤벨 운동", "startDate": "2027-03-16", "endDate": "2027-03-20", "inputType": "dumbbell", "weeklyTarget": 3, "dailyTarget": 3, "unit": "일", "dailyUnit": "종목", "color": "#5A6372", "description": "세 종목 10회×2세트, 3일 이상",
+      "exercises": [
+        { "id": "CURL", "title": "덤벨 컬", "repetitions": 10, "targetSets": 2, "sideRule": "좌우 각각 10회 = 1세트" },
+        { "id": "SQUAT", "title": "덤벨 스쿼트", "repetitions": 10, "targetSets": 2, "sideRule": "전체 10회 = 1세트" },
+        { "id": "ROW", "title": "덤벨 로우", "repetitions": 10, "targetSets": 2, "sideRule": "좌우 각각 10회 = 1세트" }
+      ] }
+  ]
+}
+```
+응답은 [fixtures/challenge-detail.json](./fixtures/challenge-detail.json). 목록·참여자·학생 화면 예시는 같은 폴더.
+
+### 덤벨 기록 값
+주차의 `exercises[].id`를 키로 하는 객체. `{ "CURL": 2, "SQUAT": 2, "ROW": null }`처럼 **정확히 그 키들만**, 미입력은 `null`. 레거시 챌린지는 `D12_CURL`/`D12_SQUAT`/`D12_ROW`를 그대로 쓴다.

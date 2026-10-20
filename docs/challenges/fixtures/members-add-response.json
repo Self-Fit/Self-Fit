@@ -1,0 +1,16 @@
+{
+  "added": [
+    {
+      "id": "m-4", "challengeId": "c2027-spring",
+      "user": { "id": "u-20205", "role": "student", "studentNumber": "20205", "name": "박강산", "grade": 2, "classNumber": 2, "targetType": "required", "participating": true, "mustChangePassword": false, "lastLoginAt": null, "createdAt": "2026-10-20T03:10:00.000Z" },
+      "mode": "invited", "status": "pending",
+      "invitedAt": "2026-10-21T02:00:00.000Z", "respondedAt": null,
+      "invitedBy": { "id": "t-1", "name": "검증 교사" }
+    }
+  ],
+  "skipped": [
+    { "userId": "u-10101", "studentNumber": "10101", "name": "김하늘", "reason": "already_active" },
+    { "userId": "u-10102", "studentNumber": "10102", "name": "이바다", "reason": "already_pending" },
+    { "userId": "u-nope", "studentNumber": null, "name": null, "reason": "not_found" }
+  ]
+}

@@ -91,3 +91,7 @@ node --env-file=backend/.env tests/browser-fixture.mjs
 ```
 
 이 환경의 검증용 계정은 스크립트 안에만 정의되어 있으며 실제 서비스 계정이 아닙니다. 화면 캡처와 확인 결과는 `output/implementation-previews/`에 저장합니다.
+
+## 진행 중인 기능: 챌린지 등록·재활용·인원 선택·강제/초대
+
+설계와 phase별 작업 문서는 [docs/challenges/README.md](docs/challenges/README.md)에, API 계약은 [docs/challenges/api-contract.md](docs/challenges/api-contract.md)에 있습니다. 에이전트(Codex 등)와 팀원은 루트 [AGENTS.md](AGENTS.md)의 규칙에 따라 맡은 phase 문서를 보고 작업합니다.

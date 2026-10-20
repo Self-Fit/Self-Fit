@@ -1,0 +1,26 @@
+{
+  "members": [
+    {
+      "id": "m-1", "challengeId": "c2027-spring",
+      "user": { "id": "u-10101", "role": "student", "studentNumber": "10101", "name": "김하늘", "grade": 1, "classNumber": 1, "targetType": "required", "participating": true, "mustChangePassword": false, "lastLoginAt": "2026-10-20T03:12:14.646Z", "createdAt": "2026-10-20T03:10:00.000Z" },
+      "mode": "forced", "status": "active",
+      "invitedAt": "2026-10-20T06:10:00.000Z", "respondedAt": null,
+      "invitedBy": { "id": "t-1", "name": "검증 교사" }
+    },
+    {
+      "id": "m-2", "challengeId": "c2027-spring",
+      "user": { "id": "u-10102", "role": "student", "studentNumber": "10102", "name": "이바다", "grade": 1, "classNumber": 1, "targetType": "optional", "participating": false, "mustChangePassword": true, "lastLoginAt": null, "createdAt": "2026-10-20T03:10:00.000Z" },
+      "mode": "invited", "status": "pending",
+      "invitedAt": "2026-10-20T06:10:00.000Z", "respondedAt": null,
+      "invitedBy": { "id": "t-1", "name": "검증 교사" }
+    },
+    {
+      "id": "m-3", "challengeId": "c2027-spring",
+      "user": { "id": "u-30310", "role": "student", "studentNumber": "30310", "name": "최들판", "grade": 3, "classNumber": 3, "targetType": "optional", "participating": true, "mustChangePassword": false, "lastLoginAt": null, "createdAt": "2026-10-20T03:10:00.000Z" },
+      "mode": "invited", "status": "declined",
+      "invitedAt": "2026-10-20T06:10:00.000Z", "respondedAt": "2026-10-21T01:00:00.000Z",
+      "invitedBy": { "id": "t-1", "name": "검증 교사" }
+    }
+  ],
+  "stats": { "active": 1, "pending": 1, "declined": 1, "removed": 0, "forced": 1, "invited": 2 }
+}

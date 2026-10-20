@@ -1,0 +1,34 @@
+{
+  "challenge": {
+    "id": "c2027-spring",
+    "title": "2027 봄 챌린지",
+    "description": "3월 한 달, 매주 운동 하나",
+    "year": 2027,
+    "lifecycle": "draft",
+    "phase": "draft",
+    "startDate": "2027-03-02",
+    "endDate": "2027-03-20",
+    "enrollmentDeadline": "2027-03-01",
+    "today": "2026-10-20",
+    "weekCount": 3,
+    "sourceChallengeId": "c2026-legacy",
+    "counts": { "active": 0, "pending": 0, "declined": 0, "forced": 0, "invited": 0 },
+    "createdAt": "2026-10-20T06:00:00.000Z",
+    "updatedAt": "2026-10-20T06:00:00.000Z",
+    "weeks": [
+      { "id": "w1", "week": 1, "title": "만보 걷기", "startDate": "2027-03-02", "endDate": "2027-03-08", "inputType": "walking", "weeklyTarget": 5, "dailyTarget": null, "unit": "일", "dailyUnit": "보", "color": "#E07A2E", "description": "하루 10,000보 이상, 기준을 충족한 5일" },
+      { "id": "w2", "week": 2, "title": "줄넘기", "startDate": "2027-03-09", "endDate": "2027-03-15", "inputType": "count", "weeklyTarget": 1000, "dailyTarget": 200, "unit": "회", "dailyUnit": "회", "color": "#2F7FD8", "description": "하루 200회, 주간 합계 1,000회 이상" },
+      { "id": "w3", "week": 3, "title": "덤벨 운동", "startDate": "2027-03-16", "endDate": "2027-03-20", "inputType": "dumbbell", "weeklyTarget": 3, "dailyTarget": 3, "unit": "일", "dailyUnit": "종목", "color": "#5A6372", "description": "세 종목 10회×2세트, 3일 이상",
+        "exercises": [
+          { "id": "CURL", "title": "덤벨 컬", "repetitions": 10, "targetSets": 2, "sideRule": "좌우 각각 10회 = 1세트" },
+          { "id": "SQUAT", "title": "덤벨 스쿼트", "repetitions": 10, "targetSets": 2, "sideRule": "전체 10회 = 1세트" },
+          { "id": "ROW", "title": "덤벨 로우", "repetitions": 10, "targetSets": 2, "sideRule": "좌우 각각 10회 = 1세트" }
+        ] }
+    ],
+    "activityDates": [
+      "2027-03-02", "2027-03-03", "2027-03-04", "2027-03-05", "2027-03-06", "2027-03-07", "2027-03-08",
+      "2027-03-09", "2027-03-10", "2027-03-11", "2027-03-12", "2027-03-13", "2027-03-14", "2027-03-15",
+      "2027-03-16", "2027-03-17", "2027-03-18", "2027-03-19", "2027-03-20"
+    ]
+  }
+}

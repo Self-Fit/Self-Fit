@@ -1,0 +1,38 @@
+{
+  "challenges": [
+    {
+      "id": "c2027-spring",
+      "title": "2027 봄 챌린지",
+      "description": "3월 한 달, 매주 운동 하나",
+      "year": 2027,
+      "lifecycle": "draft",
+      "phase": "draft",
+      "startDate": "2027-03-02",
+      "endDate": "2027-03-20",
+      "enrollmentDeadline": "2027-03-01",
+      "today": "2026-10-20",
+      "weekCount": 3,
+      "sourceChallengeId": "c2026-legacy",
+      "counts": { "active": 0, "pending": 0, "declined": 0, "forced": 0, "invited": 0 },
+      "createdAt": "2026-10-20T06:00:00.000Z",
+      "updatedAt": "2026-10-20T06:00:00.000Z"
+    },
+    {
+      "id": "c2026-legacy",
+      "title": "2026 Self Fit 챌린지",
+      "description": "12주 동안 매주 하나의 운동을 완료해요.",
+      "year": 2026,
+      "lifecycle": "published",
+      "phase": "ended",
+      "startDate": "2026-05-04",
+      "endDate": "2026-09-04",
+      "enrollmentDeadline": "2026-05-03",
+      "today": "2026-10-20",
+      "weekCount": 12,
+      "sourceChallengeId": null,
+      "counts": { "active": 194, "pending": 0, "declined": 2, "forced": 180, "invited": 16 },
+      "createdAt": "2026-05-01T00:00:00.000Z",
+      "updatedAt": "2026-09-04T15:00:00.000Z"
+    }
+  ]
+}
