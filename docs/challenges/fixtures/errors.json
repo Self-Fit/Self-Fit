@@ -9,6 +9,7 @@
   "CHALLENGE_LOCKED": { "status": 409, "body": { "error": { "code": "CHALLENGE_LOCKED", "message": "시작된 챌린지의 주차와 날짜는 바꿀 수 없습니다." } } },
   "INVITATION_CLOSED": { "status": 409, "body": { "error": { "code": "INVITATION_CLOSED", "message": "초대 수락 기간이 지났습니다." } } },
   "ENROLLMENT_CLOSED": { "status": 409, "body": { "error": { "code": "ENROLLMENT_CLOSED", "message": "참여 등록 기간이 지났습니다." } } },
+  "INVITATION_SELECTION_REQUIRED": { "status": 409, "body": { "error": { "code": "INVITATION_SELECTION_REQUIRED", "message": "수락할 챌린지 초대를 선택해 주세요.", "details": { "challengeIds": ["c2027-spring", "c2027-summer"] } } } },
   "NOT_MEMBER": { "status": 403, "body": { "error": { "code": "NOT_MEMBER", "message": "이 챌린지의 참여자가 아닙니다." } } },
   "HAS_RECORDS": { "status": 409, "body": { "error": { "code": "HAS_RECORDS", "message": "운동 기록이 있는 참여자는 제외할 수 없습니다." } } }
 }

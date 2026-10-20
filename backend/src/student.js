@@ -4,6 +4,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { fail, requiredText, dateParam } from './errors.js';
 import { canWriteDate, getWeekForDate, koreanDate, dailyStatus, summarizeProgram, validateValue } from './domain/index.js';
 import { studentContext } from './challenge-context.js';
+import { acceptOnlyInvitation, membershipSelf } from './memberships.js';
 import { challengeDto } from './challenges.js';
 import { userDto, recordDto, correctionDto, programDto, recordsWithAttachments } from './dto.js';
 export function checkValue(challenge,date,value) {
@@ -94,11 +95,13 @@ export function studentRecordRouter(db,{legacy=false}={}) {
   });
   return router;
 }
-export const membershipSelf = membership => membership ? {mode:membership.mode,status:membership.status,invitedAt:membership.invitedAt,respondedAt:membership.respondedAt} : null;
 export function studentRouter(db) {
   const router=Router();
   router.use(studentRecordRouter(db,{legacy:true}));
-  router.post('/enroll',(req,res)=>fail(403,'ENROLLMENT_CLOSED','대기 중인 초대가 없어요.'));
+  router.post('/enroll',async(req,res)=>{
+    await acceptOnlyInvitation(db,req.user.id);
+    res.json({user:userDto({...req.user,participating:true})});
+  });
   router.get('/corrections',async(req,res)=>res.json({corrections:(await db.correction.findMany({where:{requesterId:req.user.id},include:correctionInclude,orderBy:{createdAt:'desc'}})).map(correctionDto)}));
   router.get('/notifications',async(req,res)=>{
     const notifications=await db.notification.findMany({where:{userId:req.user.id},select:{id:true,type:true,title:true,body:true,data:true,readAt:true,createdAt:true},orderBy:{createdAt:'desc'}});

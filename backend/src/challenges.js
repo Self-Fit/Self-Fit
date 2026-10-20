@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { requireRole } from './auth.js';
 import { fail } from './errors.js';
 import { activityDates, challengePhase, koreanDate, shiftWeeks, validateWeeks } from './domain/index.js';
+import { addMembers, listMembers, previewMembers, removeMember } from './memberships.js';
 
 const includeWeeks = { weeks: { orderBy: { week: 'asc' } } };
 const editableFields = ['title', 'description', 'startDate', 'endDate', 'enrollmentDeadline', 'weeks'];
@@ -288,5 +289,13 @@ export function challengeRouter(db) {
   router.post('/:id/publish', async (req, res) => res.json({ challenge: challengeDto(await publish(db, req.params.id)) }));
   router.post('/:id/archive', async (req, res) => res.json({ challenge: challengeDto(await archive(db, req.params.id)) }));
   router.delete('/:id', async (req, res) => res.json(await remove(db, req.params.id)));
+  router.get('/:id/members', async (req, res) => res.json(await listMembers(db, req.params.id, req.query)));
+  router.post('/:id/members/preview', async (req, res) => res.json(await previewMembers(db, req.params.id, req.body)));
+  router.post('/:id/members', async (req, res) => {
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) fail(400, 'INVALID_SELECTION', '학생 선택 정보를 확인해 주세요.');
+    const { mode, ...selection } = req.body;
+    res.status(201).json(await addMembers(db, { challenge: req.params.id, teacher: req.user, mode, selection }));
+  });
+  router.delete('/:id/members/:userId', async (req, res) => res.json(await removeMember(db, req.params.id, req.params.userId)));
   return router;
 }

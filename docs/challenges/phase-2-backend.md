@@ -12,7 +12,7 @@
 - 교사: 계약의 `members`, `members/preview`, `DELETE members/:userId`를 `challengeRouter`에 추가.
 - 학생: `backend/src/student-challenges.js`로 분리해 `/student/challenges`, `/:id/accept`, `/:id/decline`, `/:id`, `/:id/dashboard`, `/:id/records*`, `/:id/records/:date/corrections`, 첨부 경로. 기존 `studentRouter`의 핸들러를 "챌린지를 인자로 받는 함수"로 뽑아 레거시 경로와 공유한다(코드 중복 금지).
 - `requireMember(status='active')` 미들웨어: 참여가 아니면 `403 NOT_MEMBER`. `GET /student/challenges/:id`는 published면 참여 여부와 무관하게 허용(초대 카드에서 상세 보기).
-- `POST /student/enroll` 호환: 현재 챌린지에 `pending`이 있으면 accept와 동일, 없으면 기존 `403 ENROLLMENT_CLOSED`.
+- `POST /student/enroll` 호환: 게시된 챌린지의 `invited/pending` 중 오늘이 마감일 이하인 초대가 0개면 기존 `403 ENROLLMENT_CLOSED`, 1개면 수락 후 기존 `{user}` 응답, 여러 개면 변경 없이 `409 INVITATION_SELECTION_REQUIRED`와 `details:{challengeIds:[id,...]}`를 반환한다. 여러 초대는 학생이 선택하고 `POST /student/challenges/:id/accept`로 수락한다.
 
 ## 3. 알림
 - `Notification.data` 사용. 초대: `type:'invitation'`, `eventKey:invitation:<membershipId>:<invitedAt ISO>`, 제목 "새 챌린지에 초대됐어요", 본문에 챌린지 제목과 마감일. 강제 등록: `type:'enrollment'`, `eventKey:enrollment:<membershipId>`.
