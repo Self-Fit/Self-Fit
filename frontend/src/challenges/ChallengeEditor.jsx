@@ -91,10 +91,11 @@ export default function ChallengeEditor({ mode, id }) {
 
   function payload() {
     if (lock !== 'structure') return body;
-    // After the start only title, description and week colours may change (README §4.1).
-    const colors = body.weeks.map(week => week.color);
-    const changed = challenge.weeks.some((week, index) => week.color.toUpperCase() !== colors[index]);
-    return { title: body.title, description: body.description, ...(changed ? { weeks: challenge.weeks.map(({ id: _id, week: _week, ...week }, index) => ({ ...week, color: colors[index] })) } : {}) };
+    // After the start only titles, descriptions and week colours may change (README §4.1, server "cosmetic" fields):
+    // resend every other week field exactly as stored, and only when one of those three changed.
+    const cosmetic = index => ({ title: body.weeks[index].title, description: body.weeks[index].description, color: body.weeks[index].color });
+    const changed = challenge.weeks.some((week, index) => Object.entries(cosmetic(index)).some(([key, value]) => (key === 'color' ? week.color.toUpperCase() : week[key] ?? '') !== value));
+    return { title: body.title, description: body.description, ...(changed ? { weeks: challenge.weeks.map(({ id: _id, week: _week, ...week }, index) => ({ ...week, ...cosmetic(index) })) } : {}) };
   }
   async function save() {
     setAttempted(true); setNotice(null);
@@ -137,7 +138,7 @@ export default function ChallengeEditor({ mode, id }) {
       {from === 'template' && challenge?.lifecycle === 'draft' && <div className="banner g"><Icon name="history" /><span>양식에서 복사한 초안이에요. 주차 날짜를 새 시작일에 맞춰 옮겼어요. 내용을 확인한 뒤 게시하세요.</span></div>}
       {challenge?.lifecycle === 'draft' && dirty && <div className="banner line"><Icon name="info" /><span>게시하려면 먼저 변경 내용을 저장해 주세요.</span></div>}
       {challenge?.lifecycle === 'published' && challenge.phase === 'upcoming' && <div className="banner blue"><Icon name="calendar" /><span>게시된 챌린지예요. 시작일({dateText(challenge.startDate)}) 전까지 기간과 주차 구성을 바꿀 수 있어요.</span></div>}
-      {lock === 'structure' && <div className="banner warn"><Icon name="lock" /><span>시작된 챌린지라 기간과 주차 구성은 바꿀 수 없어요. 제목·설명과 주차 색만 수정할 수 있어요.</span></div>}
+      {lock === 'structure' && <div className="banner warn"><Icon name="lock" /><span>시작된 챌린지라 기간과 주차 구성은 바꿀 수 없어요. 제목·설명과 주차 이름·설명·색만 수정할 수 있어요.</span></div>}
       {notice && <ErrorNotice error={notice} />}
     </div>
 

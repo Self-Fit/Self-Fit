@@ -105,9 +105,9 @@ export async function duplicateChallenge(id, { title, startDate } = {}) {
   return { challenge: detail(challenge) };
 }
 
-const WEEK_FIELDS = ['title', 'startDate', 'endDate', 'inputType', 'weeklyTarget', 'dailyTarget', 'unit', 'dailyUnit', 'description', 'exercises'];
+const WEEK_FIELDS = ['startDate', 'endDate', 'inputType', 'weeklyTarget', 'dailyTarget', 'unit', 'dailyUnit', 'exercises'];
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-/** After the start only the challenge title/description and week colours may change (README §4.1). */
+/** After the start only titles, descriptions and week colours may change (README §4.1; the server's cosmetic fields). */
 function touchesLockedFields(challenge, body) {
   if (['startDate', 'endDate', 'enrollmentDeadline'].some(key => key in body && body[key] !== challenge[key])) return true;
   if (!('weeks' in body)) return false;

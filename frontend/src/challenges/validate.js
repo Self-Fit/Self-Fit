@@ -1,6 +1,6 @@
-// Client-side copy of the challenge validation rules in docs/challenges/api-contract.md
-// ("주차 검증 규칙"). The server stays authoritative; this only lets the editor show the
-// same {path, message} details before a round trip. Plain ESM so node:test can import it.
+// Client-side copy of the challenge validation in backend/src/domain/index.js
+// (validateWeeks, the contract's "주차 검증 규칙"). Same paths and messages as the server's
+// INVALID_CHALLENGE details; the server stays authoritative. Plain ESM so node:test can import it.
 
 export const INPUT_TYPES = ['walking', 'check', 'count', 'distance', 'dumbbell'];
 export const DAY_UNIT = '일';
@@ -11,8 +11,8 @@ export const MAX_WEEKS = 20;
 export const MAX_EXERCISES = 5;
 export const MAX_DAYS = 365;
 export const MESSAGES = {
-  overlap: '앞 주차와 기간이 겹칩니다.',
-  exerciseId: '운동 식별값은 영문 대문자·숫자·밑줄 2~20자여야 합니다.',
+  overlap: '주차 날짜는 순서대로 배치하고 서로 겹치지 않아야 해요.',
+  exerciseId: '종목 ID는 영문 대문자·숫자·밑줄로 2~20자여야 해요.',
 };
 
 const DAY = 86_400_000;
@@ -43,99 +43,87 @@ export function suggestWeekDates(previous, challengeStart) {
 /** Defaults the server applies when a field is omitted (contract: POST /teacher/challenges). */
 export function effectiveDates(input) {
   const weeks = Array.isArray(input.weeks) ? input.weeks : [];
-  const endDate = input.endDate || weeks.at(-1)?.endDate || '';
-  const enrollmentDeadline = input.enrollmentDeadline || (isDate(input.startDate) ? addDays(input.startDate, -1) : '');
-  return { startDate: input.startDate || '', endDate, enrollmentDeadline };
-}
-
-const isNumber = value => typeof value === 'number' && Number.isFinite(value);
-const isInteger = value => Number.isInteger(value);
-const blank = value => value === null || value === undefined || value === '';
-const text = value => typeof value === 'string' ? value.trim() : '';
-
-function validateWeek(week, index, period, add) {
-  const at = field => `weeks[${index}]${field ? `.${field}` : ''}`;
-  if (!week || typeof week !== 'object') { add(at(), '주차 정보가 올바르지 않습니다.'); return; }
-  const title = text(week.title);
-  if (!title) add(at('title'), '주차 이름을 입력해 주세요.');
-  else if (title.length > 60) add(at('title'), '주차 이름은 60자 이하여야 합니다.');
-  if (typeof week.description === 'string' && week.description.length > 500) add(at('description'), '주차 설명은 500자 이하여야 합니다.');
-
-  const startOk = isDate(week.startDate), endOk = isDate(week.endDate);
-  if (!startOk) add(at('startDate'), '시작일을 입력해 주세요.');
-  if (!endOk) add(at('endDate'), '종료일을 입력해 주세요.');
-  if (startOk && endOk && week.startDate > week.endDate) add(at('endDate'), '종료일은 시작일과 같거나 뒤여야 합니다.');
-  if (startOk && isDate(period.startDate) && week.startDate < period.startDate) add(at('startDate'), '챌린지 시작일보다 앞설 수 없습니다.');
-  if (endOk && isDate(period.endDate) && week.endDate > period.endDate) add(at('endDate'), '챌린지 종료일보다 늦을 수 없습니다.');
-
-  if (!INPUT_TYPES.includes(week.inputType)) { add(at('inputType'), '운동 유형을 선택해 주세요.'); return; }
-  const target = week.weeklyTarget, daily = week.dailyTarget;
-  if (DAY_TYPES.includes(week.inputType)) {
-    if (!isInteger(target) || target < 1 || target > 7) add(at('weeklyTarget'), '주간 목표는 1~7일이어야 합니다.');
-    if (week.unit !== DAY_UNIT) add(at('unit'), `단위는 '${DAY_UNIT}'이어야 합니다.`);
-  }
-  if (week.inputType === 'check' && !blank(daily) && !isNumber(daily)) add(at('dailyTarget'), '일일 기준값은 숫자여야 합니다.');
-  if (week.inputType === 'count') {
-    if (!isInteger(target) || target < 1) add(at('weeklyTarget'), '주간 목표는 1 이상의 정수여야 합니다.');
-    if (!blank(daily) && (!isInteger(daily) || daily < 1)) add(at('dailyTarget'), '일일 목표는 1 이상의 정수여야 합니다.');
-  }
-  if (week.inputType === 'distance') {
-    if (!isNumber(target) || target <= 0) add(at('weeklyTarget'), '주간 목표는 0보다 커야 합니다.');
-    if (!blank(daily) && (!isNumber(daily) || daily <= 0)) add(at('dailyTarget'), '일일 목표는 0보다 커야 합니다.');
-  }
-  if ((week.inputType === 'count' || week.inputType === 'distance') && !text(week.unit)) add(at('unit'), '단위를 입력해 주세요.');
-  if (week.inputType === 'dumbbell') {
-    const exercises = Array.isArray(week.exercises) ? week.exercises : [];
-    if (exercises.length < 1 || exercises.length > MAX_EXERCISES) add(at('exercises'), `운동은 1~${MAX_EXERCISES}개여야 합니다.`);
-    exercises.forEach((exercise, j) => {
-      const field = name => at(`exercises[${j}].${name}`);
-      if (typeof exercise?.id !== 'string' || !EXERCISE_ID.test(exercise.id)) add(field('id'), MESSAGES.exerciseId);
-      if (!text(exercise?.title)) add(field('title'), '운동 이름을 입력해 주세요.');
-      if (!isInteger(exercise?.repetitions) || exercise.repetitions < 1) add(field('repetitions'), '반복 횟수는 1 이상의 정수여야 합니다.');
-      if (!isInteger(exercise?.targetSets) || exercise.targetSets < 1) add(field('targetSets'), '세트 수는 1 이상의 정수여야 합니다.');
-    });
-  }
-  if (typeof week.color !== 'string' || !COLOR.test(week.color)) add(at('color'), '색은 #RRGGBB 형식이어야 합니다.');
+  const endDate = input.endDate === undefined ? weeks.at(-1)?.endDate : input.endDate;
+  const enrollmentDeadline = input.enrollmentDeadline === undefined && isDate(input.startDate) ? addDays(input.startDate, -1) : input.enrollmentDeadline;
+  return { startDate: input.startDate, endDate, enrollmentDeadline };
 }
 
 /**
- * Returns [] when valid, otherwise [{path, message}] using the same paths as the
- * server's INVALID_CHALLENGE details (e.g. 'weeks[2].endDate').
+ * Returns [] when valid, otherwise [{path, message}] exactly as the server's
+ * INVALID_CHALLENGE details (e.g. 'weeks[2].endDate'). A path can appear more than once.
  */
-export function validateChallenge(input = {}) {
-  const errors = [];
-  const add = (path, message) => { if (!errors.some(error => error.path === path)) errors.push({ path, message }); };
-  const title = text(input.title);
-  if (!title) add('title', '챌린지 제목을 입력해 주세요.');
-  else if (title.length > 60) add('title', '챌린지 제목은 60자 이하여야 합니다.');
-  if (typeof input.description === 'string' && input.description.length > 500) add('description', '설명은 500자 이하여야 합니다.');
-
-  const period = effectiveDates(input);
-  const startOk = isDate(period.startDate), endOk = isDate(period.endDate);
-  if (!startOk) add('startDate', '시작일을 입력해 주세요.');
-  if (input.endDate && !endOk) add('endDate', '종료일이 올바르지 않습니다.');
-  if (startOk && endOk) {
-    if (period.startDate > period.endDate) add('endDate', '종료일은 시작일과 같거나 뒤여야 합니다.');
-    else if (daysBetween(period.startDate, period.endDate) + 1 > MAX_DAYS) add('endDate', `챌린지 기간은 최대 ${MAX_DAYS}일입니다.`);
+export function validateChallenge(input) {
+  const details = [];
+  const add = (path, message) => details.push({ path, message });
+  const object = value => value && typeof value === 'object' && !Array.isArray(value);
+  const text = (value, path, min, max) => {
+    if (typeof value !== 'string' || value.trim().length < min || value.length > max) add(path, `${min}자 이상 ${max}자 이하의 글자를 입력해 주세요.`);
+  };
+  const finite = value => typeof value === 'number' && Number.isFinite(value);
+  const integer = value => Number.isSafeInteger(value);
+  if (!object(input)) return [{ path: '', message: '챌린지 정보를 입력해 주세요.' }];
+  const { title, description = '', startDate, weeks } = input;
+  const { endDate, enrollmentDeadline } = effectiveDates(input);
+  text(title, 'title', 1, 60);
+  text(description, 'description', 0, 500);
+  for (const [path, date] of Object.entries({ startDate, endDate, enrollmentDeadline })) if (!isDate(date)) add(path, '유효한 YYYY-MM-DD 날짜를 입력해 주세요.');
+  if (isDate(startDate) && isDate(endDate)) {
+    if (startDate > endDate) add('endDate', '종료일은 시작일보다 빠를 수 없어요.');
+    if (daysBetween(startDate, endDate) + 1 > MAX_DAYS) add('endDate', `챌린지 기간은 최대 ${MAX_DAYS}일이에요.`);
   }
-  if (input.enrollmentDeadline && !isDate(input.enrollmentDeadline)) add('enrollmentDeadline', '초대 마감일이 올바르지 않습니다.');
-  else if (endOk && isDate(period.enrollmentDeadline) && period.enrollmentDeadline > period.endDate) add('enrollmentDeadline', '초대 마감일은 챌린지 종료일 이전이어야 합니다.');
-
-  const weeks = Array.isArray(input.weeks) ? input.weeks : [];
-  if (weeks.length < 1 || weeks.length > MAX_WEEKS) add('weeks', `주차는 1~${MAX_WEEKS}개여야 합니다.`);
-  weeks.forEach((week, index) => validateWeek(week, index, period, add));
-  weeks.forEach((week, index) => {
+  if (isDate(enrollmentDeadline) && isDate(endDate) && enrollmentDeadline > endDate) add('enrollmentDeadline', '참여 마감일은 챌린지 종료일 이하여야 해요.');
+  if (!Array.isArray(weeks) || weeks.length < 1 || weeks.length > MAX_WEEKS) add('weeks', `활동 주차는 1개 이상 ${MAX_WEEKS}개 이하로 설정해 주세요.`);
+  const exerciseIds = new Set();
+  if (Array.isArray(weeks)) weeks.forEach((week, index) => {
+    const path = `weeks[${index}]`;
+    if (!object(week)) { add(path, '활동 주차 정보를 입력해 주세요.'); return; }
+    text(week.title, `${path}.title`, 1, 60);
+    text(week.description === undefined ? '' : week.description, `${path}.description`, 0, 500);
+    for (const key of ['startDate', 'endDate']) if (!isDate(week[key])) add(`${path}.${key}`, '유효한 YYYY-MM-DD 날짜를 입력해 주세요.');
+    if (isDate(week.startDate) && isDate(week.endDate)) {
+      if (week.startDate > week.endDate) add(`${path}.endDate`, '주차 종료일은 시작일보다 빠를 수 없어요.');
+      if (isDate(startDate) && week.startDate < startDate) add(`${path}.startDate`, '주차는 챌린지 기간 안에 있어야 해요.');
+      if (isDate(endDate) && week.endDate > endDate) add(`${path}.endDate`, '주차는 챌린지 기간 안에 있어야 해요.');
+    }
     const previous = weeks[index - 1];
-    if (previous && isDate(previous.endDate) && isDate(week?.startDate) && week.startDate <= previous.endDate) add(`weeks[${index}].startDate`, MESSAGES.overlap);
+    if (index > 0 && isDate(previous?.endDate) && isDate(week.startDate) && previous.endDate >= week.startDate) add(`${path}.startDate`, MESSAGES.overlap);
+    if (!INPUT_TYPES.includes(week.inputType)) add(`${path}.inputType`, '지원하는 운동 기록 형식을 선택해 주세요.');
+    if (DAY_TYPES.includes(week.inputType)) {
+      if (!integer(week.weeklyTarget) || week.weeklyTarget < 1 || week.weeklyTarget > 7) add(`${path}.weeklyTarget`, '주간 목표는 1일부터 7일까지의 정수여야 해요.');
+    } else if (week.inputType === 'count') {
+      if (!integer(week.weeklyTarget) || week.weeklyTarget < 1) add(`${path}.weeklyTarget`, '주간 목표 횟수는 1 이상의 정수여야 해요.');
+    } else if (week.inputType === 'distance') {
+      if (!finite(week.weeklyTarget) || week.weeklyTarget <= 0) add(`${path}.weeklyTarget`, '주간 목표 거리는 0보다 커야 해요.');
+    }
+    const daily = week.dailyTarget ?? null;
+    if ((week.inputType === 'check' || week.inputType === 'dumbbell') && daily !== null && !finite(daily)) add(`${path}.dailyTarget`, '일일 목표는 숫자 또는 빈 값이어야 해요.');
+    if (week.inputType === 'count' && daily !== null && !integer(daily)) add(`${path}.dailyTarget`, '일일 목표 횟수는 정수 또는 빈 값이어야 해요.');
+    if (week.inputType === 'distance' && daily !== null && (!finite(daily) || daily <= 0)) add(`${path}.dailyTarget`, '일일 목표 거리는 0보다 큰 숫자 또는 빈 값이어야 해요.');
+    if (week.inputType === 'walking' || week.inputType === 'check') {
+      if (week.unit !== DAY_UNIT) add(`${path}.unit`, '일 단위 운동의 주간 단위는 일이어야 해요.');
+    } else if (typeof week.unit !== 'string' || !week.unit.trim()) add(`${path}.unit`, '운동 단위를 입력해 주세요.');
+    if (week.dailyUnit !== undefined && week.dailyUnit !== null && typeof week.dailyUnit !== 'string') add(`${path}.dailyUnit`, '일일 단위는 글자 또는 빈 값이어야 해요.');
+    if (typeof week.color !== 'string' || !COLOR.test(week.color)) add(`${path}.color`, '색상은 #RRGGBB 형식으로 입력해 주세요.');
+    if (week.inputType === 'dumbbell') {
+      if (!Array.isArray(week.exercises) || week.exercises.length < 1 || week.exercises.length > MAX_EXERCISES) add(`${path}.exercises`, `덤벨 종목은 1개 이상 ${MAX_EXERCISES}개 이하로 설정해 주세요.`);
+      if (Array.isArray(week.exercises)) week.exercises.forEach((exercise, j) => {
+        const at = `${path}.exercises[${j}]`;
+        if (!object(exercise)) { add(at, '덤벨 종목 정보를 입력해 주세요.'); return; }
+        if (typeof exercise.id !== 'string' || !EXERCISE_ID.test(exercise.id)) add(`${at}.id`, MESSAGES.exerciseId);
+        else if (exerciseIds.has(exercise.id)) add(`${at}.id`, '종목 ID는 챌린지 안에서 중복될 수 없어요.');
+        else exerciseIds.add(exercise.id);
+        text(exercise.title, `${at}.title`, 1, 60);
+        if (!integer(exercise.repetitions) || exercise.repetitions < 1) add(`${at}.repetitions`, '반복 횟수는 1 이상의 정수여야 해요.');
+        if (!integer(exercise.targetSets) || exercise.targetSets < 1) add(`${at}.targetSets`, '목표 세트는 1 이상의 정수여야 해요.');
+        if (typeof exercise.sideRule !== 'string') add(`${at}.sideRule`, '종목 수행 설명은 글자로 입력해 주세요.');
+      });
+    }
   });
-  const seen = new Map();
-  weeks.forEach((week, index) => (week?.inputType === 'dumbbell' && Array.isArray(week.exercises) ? week.exercises : []).forEach((exercise, j) => {
-    if (typeof exercise?.id !== 'string' || !EXERCISE_ID.test(exercise.id)) return;
-    if (seen.has(exercise.id)) add(`weeks[${index}].exercises[${j}].id`, '운동 식별값이 챌린지 안에서 중복됩니다.');
-    else seen.set(exercise.id, true);
-  }));
-  return errors;
+  return details;
 }
+
+const blank = value => value === null || value === undefined || value === '';
+const text = value => typeof value === 'string' ? value.trim() : '';
 
 /** Shapes a WeekInput the way the server stores it (contract: walking dailyTarget is ignored, etc.). */
 export function normalizeWeek(week) {

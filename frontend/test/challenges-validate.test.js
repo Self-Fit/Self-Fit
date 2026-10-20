@@ -48,7 +48,7 @@ test('suggestWeekDates starts the day after the previous week, 7 days long', () 
   assert.equal(addDays('2026-12-31', 1), '2027-01-01');
 });
 
-test('overlapping and out-of-order weeks are reported on the later week', () => {
+test('overlapping and out-of-order weeks are reported on the later week (server messages)', () => {
   const input = base();
   input.weeks[1].startDate = '2027-03-05';
   assert.deepEqual(validateChallenge(input), [{ path: 'weeks[1].startDate', message: MESSAGES.overlap }]);
@@ -61,12 +61,12 @@ test('challenge level rules', () => {
   assert.deepEqual(paths(validateChallenge({ ...input, title: ' ' })), ['title']);
   assert.deepEqual(paths(validateChallenge({ ...input, title: 'x'.repeat(61) })), ['title']);
   assert.deepEqual(paths(validateChallenge({ ...input, description: 'x'.repeat(501) })), ['description']);
-  assert.deepEqual(paths(validateChallenge({ ...input, startDate: '2027-02-30' })), ['startDate']);
+  assert.deepEqual(paths(validateChallenge({ ...input, startDate: '2027-02-30' })), ['startDate', 'enrollmentDeadline'], 'no start means no default deadline (same as the server)');
   assert.deepEqual(paths(validateChallenge({ ...input, enrollmentDeadline: '2027-03-15' })), ['enrollmentDeadline']);
   assert.deepEqual(validateChallenge({ ...input, enrollmentDeadline: '2027-03-14' }), [], 'deadline may be as late as endDate');
   assert.deepEqual(paths(validateChallenge({ ...input, endDate: '2027-03-10' })), ['weeks[1].endDate']);
   assert.deepEqual(paths(validateChallenge({ ...input, endDate: '2028-03-01' })), ['endDate'], 'at most 365 days');
-  assert.deepEqual(paths(validateChallenge({ ...input, weeks: [] })), ['weeks']);
+  assert.deepEqual(paths(validateChallenge({ ...input, weeks: [] })), ['endDate', 'weeks'], 'no weeks means no default end date');
   const many = Array.from({ length: 21 }, (_, index) => ({ ...input.weeks[0], startDate: addDays('2027-03-01', index * 7), endDate: addDays('2027-03-01', index * 7 + 6) }));
   assert.deepEqual(paths(validateChallenge({ ...input, weeks: many })), ['weeks']);
   assert.deepEqual(paths(validateChallenge({ ...input, weeks: [{ ...input.weeks[0], startDate: '2027-02-28' }] })), ['weeks[0].startDate']);
@@ -82,6 +82,7 @@ test('input type rules', () => {
   assert.deepEqual(week({ inputType: 'check', weeklyTarget: 5, dailyTarget: null, dailyUnit: null }), []);
   assert.deepEqual(week({ inputType: 'count', weeklyTarget: 1.5, unit: '회' }), ['weeks[0].weeklyTarget']);
   assert.deepEqual(week({ inputType: 'count', weeklyTarget: 100, dailyTarget: 2.5, unit: '회' }), ['weeks[0].dailyTarget']);
+  assert.deepEqual(week({ inputType: 'count', weeklyTarget: 100, dailyTarget: 0, unit: '회' }), [], 'count daily target only needs to be an integer');
   assert.deepEqual(week({ inputType: 'count', weeklyTarget: 100, unit: '' }), ['weeks[0].unit']);
   assert.deepEqual(week({ inputType: 'distance', weeklyTarget: 0, unit: 'km' }), ['weeks[0].weeklyTarget']);
   assert.deepEqual(week({ inputType: 'distance', weeklyTarget: 2.5, dailyTarget: 0.5, unit: 'km' }), []);

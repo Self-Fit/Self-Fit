@@ -59,7 +59,7 @@ function TypeFields({ row, index, errors, disabled, update }) {
 }
 
 function WeekRow({ row, index, count, previous, challengeStart, errors, lock, setRow, move, remove }) {
-  const structureLocked = lock !== 'none', colorLocked = lock === 'all';
+  const structureLocked = lock !== 'none', cosmeticLocked = lock === 'all';
   const update = patch => setRow(index, old => ({ ...old, ...patch }));
   const err = field => errors[`weeks[${index}].${field}`];
   const dateErrors = [errors[`weeks[${index}]`], err('startDate'), err('endDate')].filter(Boolean);
@@ -77,7 +77,7 @@ function WeekRow({ row, index, count, previous, challengeStart, errors, lock, se
     </div>
     {dateErrors.length > 0 && <div className="banner red ch-week-banner" role="alert"><Icon name="info" /><span>{dateErrors.join(' ')}</span></div>}
     <div className="ch-week-grid">
-      <FormField label="운동 이름" error={err('title')} className="ch-span-2"><TextInput value={row.title} disabled={structureLocked} error={err('title')} maxLength={60} placeholder="예: 만보 걷기" onChange={value => update({ title: value })} /></FormField>
+      <FormField label="운동 이름" error={err('title')} className="ch-span-2"><TextInput value={row.title} disabled={cosmeticLocked} error={err('title')} maxLength={60} placeholder="예: 만보 걷기" onChange={value => update({ title: value })} /></FormField>
       <FormField label="시작일"><TextInput type="date" value={row.startDate} disabled={structureLocked} error={err('startDate') || errors[`weeks[${index}]`]} onChange={value => update({ startDate: value })} /></FormField>
       <FormField label="종료일"><TextInput type="date" value={row.endDate} disabled={structureLocked} error={err('endDate')} min={row.startDate || undefined} onChange={value => update({ endDate: value })} /></FormField>
       <FormField label="운동 유형" error={err('inputType')}>
@@ -89,14 +89,14 @@ function WeekRow({ row, index, count, previous, challengeStart, errors, lock, se
     <p className="help ch-type-hint">{TYPE_HINTS[row.inputType]}</p>
     {row.inputType === 'dumbbell' && <Exercises {...{ row, index, errors, update }} disabled={structureLocked} />}
     <div className="ch-week-grid ch-week-foot">
-      <FormField label="학생에게 보일 설명" error={err('description')} className="ch-span-2"><TextInput value={row.description} disabled={structureLocked} error={err('description')} maxLength={500} placeholder="예: 하루 10,000보 이상, 기준을 충족한 5일" onChange={value => update({ description: value })} /></FormField>
-      <ColorPicker label={`${index + 1}주차`} value={row.color} disabled={colorLocked} error={err('color')} onChange={value => update({ color: value })} />
+      <FormField label="학생에게 보일 설명" error={err('description')} className="ch-span-2"><TextInput value={row.description} disabled={cosmeticLocked} error={err('description')} maxLength={500} placeholder="예: 하루 10,000보 이상, 기준을 충족한 5일" onChange={value => update({ description: value })} /></FormField>
+      <ColorPicker label={`${index + 1}주차`} value={row.color} disabled={cosmeticLocked} error={err('color')} onChange={value => update({ color: value })} />
     </div>
   </section>;
 }
 
 /**
- * lock: 'none' (draft/upcoming: everything), 'structure' (started: colour only), 'all' (archived/read-only).
+ * lock: 'none' (draft/upcoming: everything), 'structure' (started: week name, description and colour only), 'all' (read-only).
  * Errors are {path: message} using the contract's detail paths.
  */
 export default function WeekEditor({ weeks, setWeeks, errors, challengeStart, lock = 'none' }) {
