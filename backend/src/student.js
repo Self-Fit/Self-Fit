@@ -32,6 +32,7 @@ export function studentRecordRouter(db,{legacy=false}={}) {
   const router=Router({mergeParams:true});
   router.use(async(req,res,next)=>{
     if(!/^\/(dashboard|records)(\/|$)/.test(req.path)) return next();
+    if(legacy) res.set('Deprecation','true');
     const context=await studentContext(db,req.user,req.params.challengeId,{allowEmpty:legacy && req.method==='GET'});
     req.challenge=context.challenge;req.membership=context.membership;next();
   });
@@ -99,6 +100,7 @@ export function studentRouter(db) {
   const router=Router();
   router.use(studentRecordRouter(db,{legacy:true}));
   router.post('/enroll',async(req,res)=>{
+    res.set('Deprecation','true');
     await acceptOnlyInvitation(db,req.user.id);
     res.json({user:userDto({...req.user,participating:true})});
   });

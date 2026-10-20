@@ -21,6 +21,8 @@ export async function studentChallengeList(db,user) {
       current:current?item(active.find(member=>member.challengeId===current.id)):null,
       challenges:active.map(item),
       invitations:memberships.filter(member=>member.mode==='invited'&&member.status==='pending'&&today<=member.challenge.enrollmentDeadline).map(item),
+      // Pending invitations past their deadline, kept until the challenge ends so the student sees why they cannot join.
+      closedInvitations:memberships.filter(member=>member.mode==='invited'&&member.status==='pending'&&today>member.challenge.enrollmentDeadline&&today<=member.challenge.endDate).map(item),
     };
   },{isolationLevel:'RepeatableRead'});
 }

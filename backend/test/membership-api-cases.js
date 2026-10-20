@@ -470,6 +470,51 @@ export async function runMembershipApiCases(t, { db, request, a, temp }) {
       assert.deepEqual(feed.data.notifications.find(event => event.id === invitation.id).data, invitation.data);
       privacy(feed.data);
     });
+
+    await t.test('closed invitations stay visible until the end, the roster follows a chosen challenge, participating is read-only, and legacy routes are deprecated', async () => {
+      beforeStart();
+      const challenge = await makeChallenge();
+      const invited = await makeStudent('CLOSED INVITATION'), enrolled = await makeStudent('ROSTER ACTIVE');
+      await add(challenge, [invited]);
+      await add(challenge, [enrolled], 'forced');
+      const listed = async () => (await request('/student/challenges', { cookie: invited.cookie })).data;
+      assert.deepEqual((await listed()).closedInvitations, []);
+      clock('2027-03-01T15:00:00Z');
+      const closed = await listed();
+      assert.equal(closed.invitations.length, 0);
+      assert.deepEqual(closed.closedInvitations.map(item => [item.challenge.id, item.membership.status]), [[challenge.id, 'pending']]);
+      assert.deepEqual(keys(closed.closedInvitations[0]), keys(studentFixture.invitations[0]));
+      assert.deepEqual(keys(closed.closedInvitations[0].challenge), keys(studentFixture.invitations[0].challenge));
+      error(await decide(challenge, invited, 'accept'), 409, 'INVITATION_CLOSED');
+      privacy(closed);
+      clock('2027-03-08T15:00:00Z');
+      assert.deepEqual((await listed()).closedInvitations, [], 'closed invitations disappear once the challenge has ended');
+
+      const roster = await teacher(`/teacher/students?challengeId=${challenge.id}&grade=91`);
+      assert.equal(roster.status, 200, JSON.stringify(roster.data));
+      const flag = id => roster.data.students.find(user => user.id === id)?.participating;
+      assert.equal(flag(enrolled.id), true);
+      assert.equal(flag(invited.id), false);
+      const active = await teacher(`/teacher/students?challengeId=${challenge.id}&grade=91&participating=true`);
+      assert.ok(active.data.students.some(user => user.id === enrolled.id));
+      assert.ok(!active.data.students.some(user => user.id === invited.id));
+      assert.equal((await teacher('/teacher/students?grade=91')).data.students.find(user => user.id === enrolled.id).participating, false, 'without challengeId the account value is unchanged');
+      error(await teacher('/teacher/students?challengeId=missing-challenge'), 404, 'CHALLENGE_NOT_FOUND');
+
+      const created = await teacher('/teacher/students', { method: 'POST', body: { studentNumber: `member-${randomUUID()}`, name: 'MEMBER TEST REQUIRED', grade: 91, classNumber: 2, targetType: 'required' } });
+      assert.equal(created.status, 201, JSON.stringify(created.data));
+      createdUsers.add(created.data.user.id);
+      assert.equal(created.data.user.participating, false, 'a new required student is not enrolled anywhere until a teacher adds them');
+      assert.equal((await teacher(`/teacher/students/${invited.id}`, { method: 'PATCH', body: { targetType: 'required' } })).data.user.participating, false);
+
+      const deprecated = response => response.headers.get('deprecation');
+      assert.equal(deprecated(await request('/student/dashboard', { cookie: enrolled.cookie })), 'true');
+      assert.equal(deprecated(await request('/student/records', { cookie: enrolled.cookie })), 'true');
+      assert.equal(deprecated(await request('/program', { cookie: enrolled.cookie })), 'true');
+      assert.equal(deprecated(await request('/student/enroll', { cookie: invited.cookie, method: 'POST', body: {} })), 'true');
+      assert.equal(deprecated(await request(`/student/challenges/${challenge.id}/dashboard`, { cookie: enrolled.cookie })), null);
+      assert.equal(deprecated(await request('/student/challenges', { cookie: enrolled.cookie })), null);
+    });
   } finally {
     t.mock.timers.reset();
     const challengeId = { in: [...createdChallenges] }, userId = { in: [...createdUsers] };

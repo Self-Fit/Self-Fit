@@ -77,13 +77,13 @@ MembershipSelf = { mode, status, invitedAt, respondedAt }
 ### 기존 교사 API에 추가되는 `challengeId`
 `GET /teacher/overview`, `/teacher/participation`, `/teacher/export`, `/teacher/corrections`, `/teacher/students/:id`에 `challengeId` 쿼리를 추가한다.
 생략하면 "현재 챌린지"(README §5). 응답에 `challenge: ChallengeSummary`를 포함한다. 분모·`participating` 표기는 그 챌린지의 `active` 참여자다.
-`/teacher/students`(명단)는 챌린지와 무관하다.
+`/teacher/students`(명단)는 계정 단위다. `challengeId`를 주면 `participating`(및 `participating` 필터)이 그 챌린지의 `active` 참여 여부가 된다(phase 3). `User.participating` 계정 값은 phase 3부터 더 이상 갱신하지 않는다(학생 생성·명단 등록은 어떤 챌린지에도 참여시키지 않음).
 
 ## 학생 API (`role = student`)
 
 | 메서드·경로 | 요청 | 응답 | 오류 |
 | --- | --- | --- | --- |
-| `GET /student/challenges` | | `{current: null\|{challenge:ChallengeSummary, membership:MembershipSelf}, challenges:[{challenge, membership}], invitations:[{challenge, membership}]}` `invitations`는 `pending`이고 마감 전인 것만 | |
+| `GET /student/challenges` | | `{current: null\|{challenge:ChallengeSummary, membership:MembershipSelf}, challenges:[{challenge, membership}], invitations:[{challenge, membership}], closedInvitations:[{challenge, membership}]}` `challenges`는 active 참여, `invitations`는 `pending`이고 마감 전인 것만, `closedInvitations`는 마감은 지났지만 아직 종료 전(오늘 ≤ endDate)인 `pending` 초대 | |
 | `POST /student/challenges/:id/accept` | `{}` | `{membership:MembershipSelf}` status=active | `404 NO_INVITATION`, `409 INVITATION_CLOSED` |
 | `POST /student/challenges/:id/decline` | `{}` | `{membership}` status=declined | `404 NO_INVITATION` |
 | `GET /student/challenges/:id` | | `{challenge}` (published만) | `404` |
@@ -95,7 +95,7 @@ MembershipSelf = { mode, status, invitedAt, respondedAt }
 | `POST /student/challenges/:id/records/:date/attachments`, `DELETE …/attachments/:aid` | 기존과 동일 | | |
 | `GET /student/corrections`, `/student/notifications*`, `/student/settings*`, `/student/push-subscriptions` | 변경 없음(계정 단위). `Correction`에 `challengeId` 필드 추가 | | |
 
-레거시 조회·기록 경로 `GET /student/dashboard`, `/student/records*`, `/program`은 phase 3까지 유지하며 "현재 챌린지"로 해석한다. 참여 신청 호환 경로도 아래 규칙으로 유지한다.
+레거시 조회·기록 경로 `GET /student/dashboard`, `/student/records*`, `/program`은 "현재 챌린지"로 해석한다. phase 3부터 이 경로와 `POST /student/enroll`은 응답 헤더 `Deprecation: true`를 붙이며 다음 릴리스에서 제거한다. 참여 신청 호환 경로도 아래 규칙으로 유지한다.
 `POST /student/enroll {}`은 기존 응답 `{user:User}`를 유지한다. 이 호환 경로는 현재 챌린지 resolver와 별개로, 게시된 챌린지의 `mode=invited,status=pending` 중 오늘이 `enrollmentDeadline` 이하인 초대를 찾는다. 수락 가능한 초대가 0개면 기존 `403 ENROLLMENT_CLOSED`, 1개면 그 초대를 수락하고 해당 챌린지 참여가 반영된 `user`를 반환한다. 2개 이상이면 아무 초대도 변경하지 않고 `409 INVITATION_SELECTION_REQUIRED`, `details:{challengeIds:[id,...]}`를 반환한다. 클라이언트는 초대 선택을 안내하고 `POST /student/challenges/:id/accept`로 명시적으로 수락한다.
 `/program` 응답에는 `challengeId`가 추가된다.
 

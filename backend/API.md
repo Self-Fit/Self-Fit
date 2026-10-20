@@ -2,7 +2,7 @@
 
 Base `/api`; backend local port `4000`. JSON request/response unless a file is described. Session authentication uses an HttpOnly cookie; fetch with `credentials: 'include'`. Mutation requests require the same origin (local frontend origin configured by `APP_ORIGIN`). Errors: `{error:{code,message,details?}}`. Success objects are described below, not wrapped in `data`. All activity dates are Korea `YYYY-MM-DD`; timestamps are ISO instants. No client date override exists.
 
-`User = {id,role:'student'|'teacher',studentNumber,name,grade,classNumber,targetType:'required'|'optional'|null,participating,mustChangePassword,lastLoginAt:null|ISO,createdAt:ISO}`.
+`User = {id,role:'student'|'teacher',studentNumber,name,grade,classNumber,targetType:'required'|'optional'|null,participating,mustChangePassword,lastLoginAt:null|ISO,createdAt:ISO}`. `participating` is legacy account data that is no longer written; challenge-scoped responses replace it with "active in that challenge".
 `Record = {id,date,value,version,attachments:[{id,name,kind,size,url}],history,updatedAt}`. Teacher student-detail records include `history:[{id,beforeValue,afterValue,reason,createdAt,actorId,source}]`.
 Values: walking integer band `0..5`; check boolean; counts nonnegative safe integer; distance finite nonnegative number. Dumbbell values have exactly the keys in the selected week's `exercises[].id`, each holding a nonnegative safe-integer set count or null. At least one exercise must be non-null. A day is achieved only when every exercise reaches its own `targetSets`; `weeklyTarget` achieved days complete that week. The legacy 2026 challenge retains `{D12_CURL:number|null,D12_SQUAT:number|null,D12_ROW:number|null}`, ten repetitions × two sets per exercise and three achieved days during 2026-08-31–09-04. Missing values remain missing, never 0. Extra sets cannot compensate for another exercise or day.
 
@@ -14,7 +14,7 @@ Values: walking integer band `0..5`; check boolean; counts nonnegative safe inte
 - `POST /auth/change-password {currentPassword?,newPassword}` → `{user}`. 8–128 characters including English letters and digits, must differ from student number. `currentPassword` is optional only for authenticated first-login temporary-password sessions. First-login accounts can only use auth endpoints until changed.
 - `GET /health` → database readiness only; no account details.
 
-## Challenges (backend phases 1 and 2)
+## Challenges
 
 The authoritative challenge types, validation rules, requests, response fixtures and error codes are in [the challenge API contract](../docs/challenges/api-contract.md) and [shared JSON fixtures](../docs/challenges/fixtures/). The backend provides teacher challenge collection/detail, create, patch, duplicate, publish, archive and draft-delete endpoints, membership selection/registration/invitations, and student invitation and challenge-specific record endpoints. Frontend screens and final UI integration are separate phases.
 
@@ -44,7 +44,7 @@ Only active memberships permit record access/mutations and enter performance den
 
 ## Student challenge endpoints
 
-- `GET /student/challenges` → `{current:null|{challenge:ChallengeSummary,membership:MembershipSelf},challenges:[{challenge,membership}],invitations:[{challenge,membership}]}`. All challenge entries use `ChallengeSummary`; invitations contain pending invitations to published challenges that are still within their enrollment deadline. Current-challenge priority matches the legacy resolver above.
+- `GET /student/challenges` → `{current:null|{challenge:ChallengeSummary,membership:MembershipSelf},challenges:[{challenge,membership}],invitations:[{challenge,membership}],closedInvitations:[{challenge,membership}]}`. All challenge entries use `ChallengeSummary`; invitations contain pending invitations to published challenges that are still within their enrollment deadline. Current-challenge priority matches the legacy resolver above. `closedInvitations` lists pending invitations whose `enrollmentDeadline` has passed while the challenge has not yet ended (today ≤ `endDate`), so the student can see why they cannot join; accepting them still returns `409 INVITATION_CLOSED`.
 - `POST /student/challenges/:id/accept {}` → `{membership:MembershipSelf}`. Only the student's pending invitation can become active, through `enrollmentDeadline` inclusive. No pending invitation returns `404 NO_INVITATION`; a missed acceptance deadline returns `409 INVITATION_CLOSED`.
 - `POST /student/challenges/:id/decline {}` → `{membership:MembershipSelf}`. Only a pending invitation may become declined; forced or already-active membership cannot be declined. No pending invitation returns `404 NO_INVITATION`.
 - `GET /student/challenges/:id` → `{challenge:Challenge}`. The full challenge includes `weeks` and `activityDates`. Published details are available to authenticated students even before accepting an invitation. Draft and archived details are not student-visible.
@@ -54,7 +54,9 @@ Only active memberships permit record access/mutations and enter performance den
 
 Record, correction and attachment writes recheck the published lifecycle and active membership inside their database transaction, with row locks shared with registration/removal/archive operations. An upload that started on an allowed activity day may finish after midnight, but completing it cannot bypass a newly archived challenge or a removed membership. A failed upload leaves the saved numeric record intact and removes its uncommitted file.
 
-## Student
+## Student (legacy current-challenge paths, deprecated)
+
+`GET /program`, `GET /student/dashboard`, `GET /student/records*` and `POST /student/enroll` stay for one release and answer with `Deprecation: true`; they will be removed in the next release. Clients use the `/student/challenges/:id/...` paths above. Record/correction/attachment writes under `/student/records/:date` share the same handlers.
 
 - `GET /program` → `{challengeId,year,today,status,startDate,endDate,weeks,activityDates,week12Pending}` using `programDto(challenge)`; no current challenge returns `404 CHALLENGE_NOT_FOUND`. The previous response fields remain, and year/dates/week count come from the selected challenge. Week definitions contain `week,title,startDate,endDate,inputType,weeklyTarget,dailyTarget,unit,dailyUnit,color,description`; dumbbell weeks expose `exercises:[{id,title,repetitions,targetSets,sideRule}]`. `week12Pending` remains false for the settled legacy challenge.
 - `GET /student/dashboard` → `{user,program,summary,records,unreadCount}`. Summary `{weeks,completedWeeks,totalWeeks,pendingWeeks,complete,progress,status}`. Week summary includes `week,weekdayTotal,weekendTotal,total,weekdayAchieved,weekendAchieved,makeupDays,complete,progress,status,recordedDays`.
@@ -81,8 +83,8 @@ Common filters: `search,grade,classNumber,targetType,participating,achievement` 
 
 - `GET /teacher/overview?filters` → `{students:[User & {summary,records}],challenge,program,stats:{students,participants,completed,denominator},filters}`. School roster with records and summaries scoped to the chosen challenge (82 dates for the legacy challenge), no synthetic rows.
 - `GET /teacher/participation?grade=&classNumber=&targetType=` → `{challenge,summary,weeks,grades,classes,targets,filters,filterOptions}`. Only active memberships in the selected challenge enter the cohort. Summary/group `completionRate` is `completedWeeks/(participants*totalWeeks)*100`; weekly rate is completed students/participants*100. Rates are unrounded 0–100, null for empty cohorts. Summary includes `participants,completedWeeks,possibleWeeks,totalWeeks,pendingWeeks`; groups include identity/label and the same counts. `filterOptions` contains all registered student grades/classes independently of the active filters. No student identity or individual records are returned.
-- `GET /teacher/students?filters` → `{students:[User]}`.
-- `POST /teacher/students {studentNumber,name,grade,classNumber,targetType}` → `{user,temporaryPassword}`. Password returned once only. Existing student number → 409 `DUPLICATE_NUMBER`.
+- `GET /teacher/students?filters&challengeId=` → `{students:[User]}`. Account-wide roster. Without `challengeId`, `participating` is the stored legacy account value (no longer updated). With `challengeId`, `participating` and the `participating` filter mean an active membership in that challenge; unknown IDs return `404 CHALLENGE_NOT_FOUND`.
+- `POST /teacher/students {studentNumber,name,grade,classNumber,targetType}` → `{user,temporaryPassword}`. Password returned once only. Creating (or importing) a student does not enroll them in any challenge; teachers register or invite them per challenge. Existing student number → 409 `DUPLICATE_NUMBER`.
 - `PATCH /teacher/students/:id {studentNumber?,name?,grade?,classNumber?,targetType?}` → `{user}`. Updates the account-wide roster classification; challenge participation is determined by its active membership. No deletion of records.
 - `DELETE /teacher/students/:id` → `{ok:true}`. Only accounts without records/corrections can be deleted; otherwise 409 preserving evidence.
 - `GET /teacher/students/:id` → `{challenge,user,records,summary,corrections}`.

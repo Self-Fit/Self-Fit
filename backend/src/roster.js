@@ -87,7 +87,7 @@ export function rosterRouter(db) {
     const credentials=[];const prepared=[];
     for(const row of item.rows) {
       const password=temporaryPassword();
-      prepared.push({...row,role:'student',participating:row.targetType==='required',passwordHash:await hashPassword(password),mustChangePassword:true});
+      prepared.push({...row,role:'student',passwordHash:await hashPassword(password),mustChangePassword:true});
       credentials.push({studentNumber:row.studentNumber,name:row.name,temporaryPassword:password});
     }
     await db.$transaction(async tx=>{

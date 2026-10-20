@@ -14,7 +14,7 @@ import { buildParticipation } from './participation.js';
 const correctionInclude={record:{include:{attachments:true}},requester:true,decider:true};
 const duplicateNumber=(error,studentNumber)=>{if(error.code==='P2002') fail(409,'DUPLICATE_NUMBER',`이미 등록된 학번입니다: ${studentNumber}`);throw error;};
 export { parseFilters } from './filters.js';
-export async function filteredStudents(db,query,challenge=null) {
+export async function filteredStudents(db,query,challenge=null,{records=true}={}) {
   const filters=parseFilters(query),where={role:'student'};
   for(const key of ['grade','classNumber','targetType']) if(filters[key]!==undefined) where[key]=filters[key];
   if(!challenge && filters.participating!==undefined) where.participating=filters.participating;
@@ -23,11 +23,11 @@ export async function filteredStudents(db,query,challenge=null) {
   if(challenge && filters.week && !challenge.weeks.some(week=>week.week===filters.week)) fail(400,'INVALID_FILTER','해당 챌린지의 주차를 선택해 주세요.');
   let students=await db.user.findMany({where,include:challenge?{
     memberships:{where:{challengeId:challenge.id}},
-    records:{where:{challengeId:challenge.id},...recordsWithAttachments,include:{attachments:true,corrections:{orderBy:{createdAt:'desc'}}}}
+    ...(records?{records:{where:{challengeId:challenge.id},...recordsWithAttachments,include:{attachments:true,corrections:{orderBy:{createdAt:'desc'}}}}}:{}),
   }:undefined,orderBy:[{grade:'asc'},{classNumber:'asc'},{studentNumber:'asc'}]});
   if(challenge) students=students.map(user=>({...user,participating:user.memberships.some(member=>member.status==='active')}));
   if(challenge && filters.participating!==undefined) students=students.filter(user=>user.participating===filters.participating);
-  if(filters.achievement && challenge) students=students.filter(student=>student.participating&&(filters.week?summarizeWeek(challenge.weeks.find(week=>week.week===filters.week),student.records):summarizeProgram(challenge.weeks,student.records)).status===filters.achievement);
+  if(filters.achievement && challenge && records) students=students.filter(student=>student.participating&&(filters.week?summarizeWeek(challenge.weeks.find(week=>week.week===filters.week),student.records):summarizeProgram(challenge.weeks,student.records)).status===filters.achievement);
   return {students,filters};
 }
 export function teacherRouter(db) {
@@ -62,10 +62,11 @@ export function teacherRouter(db) {
     };
     res.json({...buildParticipation(challenge.weeks,students.map(user=>({...user,participating:true}))),challenge:challengeDto(challenge,undefined,{detail:false}),filters,filterOptions});
   });
-  router.get('/students',async(req,res)=>res.json({students:(await filteredStudents(db,req.query)).students.map(userDto)}));
+  // The roster is account-level; with ?challengeId= its participating flag (and filter) follow that challenge's active members.
+  router.get('/students',async(req,res)=>{const challenge=req.query.challengeId?await teacherChallenge(db,req):null;res.json({students:(await filteredStudents(db,req.query,challenge,{records:false})).students.map(userDto)});});
   router.post('/students',async(req,res)=>{
     const fields=studentFields(req.body || {});const password=temporaryPassword();
-    const user=await db.user.create({data:{...fields,role:'student',participating:fields.targetType==='required',passwordHash:await hashPassword(password),mustChangePassword:true}}).catch(error=>duplicateNumber(error,fields.studentNumber));
+    const user=await db.user.create({data:{...fields,role:'student',passwordHash:await hashPassword(password),mustChangePassword:true}}).catch(error=>duplicateNumber(error,fields.studentNumber));
     res.status(201).json({user:userDto(user),temporaryPassword:password});
   });
   const getStudent=async(id,options={})=>{
@@ -79,7 +80,6 @@ export function teacherRouter(db) {
   router.patch('/students/:id',async(req,res)=>{
     await getStudent(req.params.id);const fields=studentFields(req.body || {},true);
     if(!Object.keys(fields).length) fail(400,'INVALID_INPUT','변경할 학생 정보를 입력해 주세요.');
-    if(fields.targetType==='required') fields.participating=true;
     res.json({user:userDto(await db.user.update({where:{id:req.params.id},data:fields}).catch(error=>duplicateNumber(error,fields.studentNumber)))});
   });
   router.delete('/students/:id',async(req,res)=>{
