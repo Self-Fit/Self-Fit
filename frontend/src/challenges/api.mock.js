@@ -73,9 +73,10 @@ function activityDates(weeks) {
   return dates;
 }
 const membersOf = challengeId => state.memberships.filter(member => member.challengeId === challengeId);
-function stats(challengeId) {
+/** Counts every status; `cohort` (grade/class/targetType/search) narrows it, status/mode never do (contract). */
+function stats(challengeId, cohort = () => true) {
   const result = { active: 0, pending: 0, declined: 0, removed: 0, forced: 0, invited: 0 };
-  for (const member of membersOf(challengeId)) {
+  for (const member of membersOf(challengeId).filter(cohort)) {
     result[member.status] += 1;
     if (member.status !== 'removed') result[member.mode] += 1;
   }
@@ -201,7 +202,8 @@ export async function deleteChallenge(id) {
 // ---- Members (teacher) ----------------------------------------------------------------
 const userOf = id => roster.find(user => user.id === id);
 const self = member => ({ mode: member.mode, status: member.status, invitedAt: member.invitedAt, respondedAt: member.respondedAt });
-const memberDto = member => structuredClone({ id: member.id, challengeId: member.challengeId, user: userOf(member.userId), ...self(member), invitedBy: member.invitedById === TEACHER.id ? TEACHER : member.invitedById ? { id: member.invitedById, name: '교사' } : null });
+// Membership.user.participating means "active in this challenge" (contract, PR #2).
+const memberDto = member => structuredClone({ id: member.id, challengeId: member.challengeId, user: { ...userOf(member.userId), participating: member.status === 'active' }, ...self(member), invitedBy: member.invitedById === TEACHER.id ? TEACHER : member.invitedById ? { id: member.invitedById, name: '교사' } : null });
 const membershipOf = (challengeId, userId) => state.memberships.find(member => member.challengeId === challengeId && member.userId === userId);
 const list = value => Array.isArray(value) ? value : String(value ?? '').split(',').map(item => item.trim()).filter(Boolean);
 function matches(user, filters = {}) {
@@ -220,13 +222,10 @@ export async function listMembers(id, filters = {}) {
   await wait();
   find(id);
   const statuses = list(filters.status || 'active,pending,declined'), modes = list(filters.mode);
-  const search = String(filters.search || '').trim();
-  const members = membersOf(id).filter(member => {
-    const user = userOf(member.userId);
-    return user && statuses.includes(member.status) && (!modes.length || modes.includes(member.mode)) && matches(user, filters)
-      && (!search || user.name.includes(search) || user.studentNumber.includes(search));
-  });
-  return { members: members.map(memberDto).sort((a, b) => a.user.studentNumber.localeCompare(b.user.studentNumber)), stats: stats(id) };
+  const search = String(filters.search || '').trim().toLowerCase();
+  const cohort = member => { const user = userOf(member.userId); return !!user && matches(user, filters) && (!search || user.name.toLowerCase().includes(search) || user.studentNumber.toLowerCase().includes(search)); };
+  const members = membersOf(id).filter(member => cohort(member) && statuses.includes(member.status) && (!modes.length || modes.includes(member.mode)));
+  return { members: members.map(memberDto).sort((a, b) => a.user.studentNumber.localeCompare(b.user.studentNumber)), stats: stats(id, cohort) };
 }
 
 export async function previewMembers(id, body = {}) {
@@ -234,7 +233,7 @@ export async function previewMembers(id, body = {}) {
   find(id);
   const picked = selection(body);
   const users = picked.users || picked.ids.map(userOf).filter(Boolean);
-  return { students: structuredClone(users.map(user => { const member = membershipOf(id, user.id); return { ...user, membership: member ? self(member) : null }; })) };
+  return { students: structuredClone(users.map(user => { const member = membershipOf(id, user.id); return { ...user, participating: member?.status === 'active', membership: member ? self(member) : null }; })) };
 }
 
 export async function addMembers(id, body = {}) {
@@ -283,7 +282,7 @@ export async function listStudents() {
 // ---- Student --------------------------------------------------------------------------
 const PHASE_ORDER = ['active', 'upcoming', 'rest'];
 function mine() {
-  return state.memberships.filter(member => member.userId === ME && member.status !== 'removed')
+  return state.memberships.filter(member => member.userId === ME && ['active', 'pending'].includes(member.status))
     .map(member => ({ member, challenge: state.challenges.get(member.challengeId) }))
     .filter(entry => entry.challenge?.lifecycle === 'published');
 }
@@ -291,15 +290,15 @@ const entry = ({ member, challenge }) => ({ challenge: summary(challenge), membe
 
 export async function listMyChallenges() {
   await wait();
-  const date = today(), entries = mine();
-  const open = item => item.member.status === 'pending' && date <= item.challenge.enrollmentDeadline;
+  const date = today(), entries = mine().sort((a, b) => b.challenge.startDate.localeCompare(a.challenge.startDate));
+  const open = item => item.member.mode === 'invited' && item.member.status === 'pending' && date <= item.challenge.enrollmentDeadline;
   const active = entries.filter(item => item.member.status === 'active');
   const current = PHASE_ORDER.map(phase => active.find(item => phaseOf(item.challenge) === phase)).find(Boolean)
     || active.filter(item => phaseOf(item.challenge) === 'ended').sort((a, b) => b.challenge.endDate.localeCompare(a.challenge.endDate))[0];
   return {
     current: current ? entry(current) : null,
-    // Everything that is not a live invitation, so a closed (expired) invitation can still be shown as such.
-    challenges: entries.filter(item => !open(item) && item.member.status !== 'declined').map(entry),
+    // Same as the server: confirmed memberships only. An expired invitation simply disappears.
+    challenges: active.map(entry),
     invitations: entries.filter(open).map(entry),
   };
 }

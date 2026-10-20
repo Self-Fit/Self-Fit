@@ -64,7 +64,7 @@ export default function MemberManager({ mode, id }) {
       <div className="grow"><PhaseChip phase={challenge.phase} /><h1 className="mt8">{challenge.title}</h1><p>{periodText(challenge.startDate, challenge.endDate)} · 초대 마감 {challenge.enrollmentDeadline.slice(5).replace('-', '/')}</p></div>
       <button type="button" className="btn primary" disabled={!enrollment.invite && !enrollment.force} title={enrollment.reason || undefined} onClick={() => setAdding(true)}><Icon name="plus" size={18} />학생 추가</button>
     </div>
-    <ChallengeTabs id={id} current="members" memberCount={stats ? stats.active + stats.pending : undefined} />
+    <ChallengeTabs id={id} current="members" memberCount={challenge.counts.active + challenge.counts.pending} />
     <div className="stack gap12 mt16">
       <MockNotice />
       {enrollment.reason && <div className="banner warn"><Icon name="info" /><span>{enrollment.reason}</span></div>}
