@@ -1,16 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildParticipationData, SOURCE_WEEK_OPTIONS } from '../scripts/participation-data.js';
-import { WEEKS, activityDates, validateValue, getWeekForDate, summarizeProgram } from '../src/domain/index.js';
+import { LEGACY_WEEKS, activityDates, validateValue, getWeekForDate, summarizeProgram } from '../src/domain/index.js';
 
 const targets = new Map(SOURCE_WEEK_OPTIONS.flatMap((list, index) => list.map(week => [week, index + 1])));
 targets.set(12, 12); targets.set(25, 2);
-const sourceDate = (week, day) => week <= 12 ? activityDates(week)[day] : new Date(Date.parse('2026-09-07T00:00:00Z') + ((week - 13) * 7 + day) * 86400000).toISOString().slice(0, 10);
+const sourceDate = (week, day) => week <= 12 ? activityDates(LEGACY_WEEKS, week)[day] : new Date(Date.parse('2026-09-07T00:00:00Z') + ((week - 13) * 7 + day) * 86400000).toISOString().slice(0, 10);
 function fixture(valueFor = () => null) {
   const roster = ['10101', '가상 학생', 1, 1, '선택', '참여', 2026, '예시', null, '꺼짐', '검증용 가상 자료', 1, 30, 3, 31, 3, 1, '등급 유지', 0.5, 106, 53, 0.5, 10, 5, 5 / 23, '포함', 5];
   const source = { filename: 'test-only.xlsx', sha256: 'a'.repeat(64), sheets: { 학생명단: [[], [], [], [], [], roster], 날짜별기록: [[], [], [], [], []] } };
   for (let week = 1; week <= 25; week++) for (let day = 0; day < (week === 12 ? 5 : week === 25 ? 1 : 7); day++) {
-    const target = WEEKS[targets.get(week) - 1];
+    const target = LEGACY_WEEKS[targets.get(week) - 1];
     source.sheets.날짜별기록.push(['10101', `${sourceDate(week, day)}T00:00:00`, '월화수목금토일'[day], week, target.title, day < 5 ? '평일 필수' : '선택·보충', target.inputType, week === 12 ? null : valueFor(week, day, target), target.unit, null, null, null, null, day < 5 ? 1 : 0, null, null, '가상']);
   }
   return source;
@@ -31,7 +31,7 @@ test('blank dates are absent; a whole source week maps to the same weekdays with
   assert.ok(result.records.some(row => row.value === 0));
   assert.ok(result.records.some(row => row.value === 2.345));
   for (const record of result.records) {
-    const week = getWeekForDate(record.date), original = source.sheets.날짜별기록[record.sourceMetadata.sourceRow - 1];
+    const week = getWeekForDate(LEGACY_WEEKS, record.date), original = source.sheets.날짜별기록[record.sourceMetadata.sourceRow - 1];
     assert.ok(validateValue(week, record.value).valid);
     assert.notEqual(week.week, 12);
     assert.notEqual(record.sourceMetadata.sourceWeek, 25);
@@ -41,7 +41,7 @@ test('blank dates are absent; a whole source week maps to the same weekdays with
     assert.equal(record.sourceMetadata.originalCreatedAt, null);
     assert.equal(record.sourceMetadata.isSynthetic, true);
   }
-  assert.equal(summarizeProgram(result.records).complete, false);
+  assert.equal(summarizeProgram(LEGACY_WEEKS, result.records).complete, false);
   assert.deepEqual(buildParticipationData(source), result, 'same input must make exactly the same selection');
 });
 

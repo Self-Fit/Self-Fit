@@ -28,6 +28,9 @@ model User {
   decidedCorrections Correction[] @relation("decider")
   imports            RosterImport[]
   sourceRows         StudentSource[]
+  createdChallenges  Challenge[] @relation("challengeCreator")
+  memberships        ChallengeMembership[] @relation("challengeMember")
+  invitedMemberships ChallengeMembership[] @relation("challengeInviter")
   @@index([role, grade, classNumber])
 }
 model Session {
@@ -43,6 +46,8 @@ model DailyRecord {
   id          String @id @default(uuid())
   userId      String
   user        User @relation(fields:[userId], references:[id], onDelete:Restrict)
+  challengeId String
+  challenge   Challenge @relation(fields:[challengeId], references:[id], onDelete:Restrict)
   date        String
   value       Json
   sourceDatasetId String?
@@ -54,7 +59,8 @@ model DailyRecord {
   attachments Attachment[]
   corrections Correction[]
   revisions   RecordRevision[]
-  @@unique([userId, date])
+  @@unique([challengeId, userId, date])
+  @@index([userId, date])
   @@index([date])
   @@index([sourceDatasetId])
 }
@@ -130,6 +136,7 @@ model Notification {
   type       String
   title      String
   body       String
+  data       Json?
   readAt     DateTime?
   createdAt  DateTime @default(now())
   pushState  String @default("pending")
@@ -157,4 +164,61 @@ model RosterImport {
   consumed  Boolean @default(false)
   expiresAt DateTime
   createdAt DateTime @default(now())
+}
+
+model Challenge {
+  id                 String @id @default(uuid())
+  title              String
+  description        String @default("")
+  year               Int
+  lifecycle          String @default("draft")
+  startDate          String
+  endDate            String
+  enrollmentDeadline String
+  sourceChallengeId  String?
+  sourceChallenge    Challenge? @relation("challengeSource", fields:[sourceChallengeId], references:[id], onDelete:SetNull)
+  copies             Challenge[] @relation("challengeSource")
+  createdById        String?
+  createdBy          User? @relation("challengeCreator", fields:[createdById], references:[id], onDelete:SetNull)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  weeks              ChallengeWeek[]
+  memberships        ChallengeMembership[]
+  records            DailyRecord[]
+  @@index([lifecycle, startDate])
+}
+model ChallengeWeek {
+  id           String @id @default(uuid())
+  challengeId  String
+  challenge    Challenge @relation(fields:[challengeId], references:[id], onDelete:Cascade)
+  week         Int
+  title        String
+  startDate    String
+  endDate      String
+  inputType    String
+  weeklyTarget Float
+  dailyTarget  Float?
+  unit         String
+  dailyUnit    String?
+  color        String
+  description  String @default("")
+  exercises    Json?
+  @@unique([challengeId, week])
+}
+model ChallengeMembership {
+  id          String @id @default(uuid())
+  challengeId String
+  challenge   Challenge @relation(fields:[challengeId], references:[id], onDelete:Cascade)
+  userId      String
+  user        User @relation("challengeMember", fields:[userId], references:[id], onDelete:Cascade)
+  mode        String
+  status      String
+  invitedById String?
+  invitedBy   User? @relation("challengeInviter", fields:[invitedById], references:[id], onDelete:SetNull)
+  invitedAt   DateTime @default(now())
+  respondedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@unique([challengeId, userId])
+  @@index([userId, status])
 }

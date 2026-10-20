@@ -1,4 +1,4 @@
-import { WEEKS, summarizeProgram } from './domain/index.js';
+import { summarizeProgram } from './domain/index.js';
 
 const percentage = (completed, possible) => possible === 0 ? null : completed / possible * 100;
 const numberOrder = (left, right) => left === right ? 0 : left == null ? 1 : right == null ? -1 : left - right;
@@ -12,11 +12,11 @@ function addToGroup(groups, key, fields, completedWeeks) {
 }
 
 /** Aggregate effective records only; pending corrections never enter this input. */
-export function buildParticipation(students) {
+export function buildParticipation(challengeWeeks,students) {
   if (!Array.isArray(students)) throw new TypeError('학생 목록은 배열이어야 합니다.');
-  const program = summarizeProgram();
+  const program = summarizeProgram(challengeWeeks,[]);
   const cohort = students.filter(student => student.participating === true);
-  const weeks = WEEKS.map(week => ({
+  const weeks = challengeWeeks.map(week => ({
     week: week.week, name: week.title, participants: cohort.length, completed: 0,
     completionRate: null, pending: program.pendingWeeks.includes(week.week),
   }));
@@ -26,7 +26,7 @@ export function buildParticipation(students) {
   ]));
   let completedWeeks = 0;
   for (const student of cohort) {
-    const summary = summarizeProgram(student.records ?? []);
+    const summary = summarizeProgram(challengeWeeks,student.records ?? []);
     completedWeeks += summary.completedWeeks;
     for (const [index, week] of summary.weeks.entries()) {
       if (week.complete === true) weeks[index].completed++;

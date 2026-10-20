@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
+import { LEGACY_CHALLENGE_ID } from '../scripts/participation-data.js';
 import { buildRevisedParticipationData } from '../scripts/revised-participation-data.js';
 import { importRevisedParticipationData } from '../scripts/import-revised-participation.js';
 import { makeRevisedSourceFixture } from './revised-participation-data.test.js';
@@ -52,7 +53,7 @@ test('revision importer uses real isolated PostgreSQL transactions and preserves
         { userId: first.id, date: '2026-09-03', value: { D12_CURL: 2, D12_SQUAT: 2, D12_ROW: 2 }, sourceDatasetId: prior2.id },
         { userId: second.id, date: '2026-08-31', value: { D12_CURL: 1, D12_SQUAT: 1, D12_ROW: 1 }, sourceDatasetId: prior2.id },
       ];
-      await db.dailyRecord.createMany({ data: oldSpecs.map(record => ({ id: randomUUID(), ...record, sourceMetadata: { isSynthetic: true, oldSourceRow: 11 }, createdAt: originalTime, updatedAt: originalTime })) });
+      await db.dailyRecord.createMany({ data: oldSpecs.map(record => ({ id: randomUUID(), challengeId: LEGACY_CHALLENGE_ID, ...record, sourceMetadata: { isSynthetic: true, oldSourceRow: 11 }, createdAt: originalTime, updatedAt: originalTime })) });
       // More precision than JS can represent checks that both archival and change detection use JSONB.
       await db.$executeRaw`UPDATE "DailyRecord" SET "value" = '0.10000000000000000000001'::jsonb,
         "sourceMetadata" = '{"isSynthetic":true,"precise":0.12345678901234567890123456789}'::jsonb WHERE "userId" = ${first.id} AND "date" = '2026-06-29'`;
@@ -68,7 +69,8 @@ test('revision importer uses real isolated PostgreSQL transactions and preserves
           'records', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r."id") FROM "DailyRecord" r),
           'revisions', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r."id") FROM "RecordRevision" r),
           'corrections', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r."id") FROM "Correction" r),
-          'attachments', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r."id") FROM "Attachment" r))::text AS "text"`;
+          'attachments', (SELECT jsonb_agg(to_jsonb(r) ORDER BY r."id") FROM "Attachment" r),
+          'memberships', (SELECT jsonb_agg(to_jsonb(m) ORDER BY m."id") FROM "ChallengeMembership" m))::text AS "text"`;
         return hash(result.text);
       };
       const protectedSnapshot = async () => {
@@ -108,7 +110,7 @@ test('revision importer uses real isolated PostgreSQL transactions and preserves
         await db.$executeRaw`UPDATE "DailyRecord" SET "version" = 1, "updatedAt" = ${new Date('2026-09-21T00:00:00Z')} WHERE "id" = ${record.id}`;
         await unchanged(() => importRevisedParticipationData(db, source, { apply: true }), /was edited/);
         await db.$executeRaw`UPDATE "DailyRecord" SET "updatedAt" = "createdAt" WHERE "id" = ${record.id}`;
-        const foreign = await db.dailyRecord.create({ data: { userId: first.id, date: '2026-05-11', value: 1, sourceDatasetId: prior1.id, sourceMetadata: {}, createdAt: originalTime, updatedAt: originalTime } });
+        const foreign = await db.dailyRecord.create({ data: { challengeId: LEGACY_CHALLENGE_ID, userId: first.id, date: '2026-05-11', value: 1, sourceDatasetId: prior1.id, sourceMetadata: {}, createdAt: originalTime, updatedAt: originalTime } });
         await unchanged(() => importRevisedParticipationData(db, source, { apply: true }), /outside this roster/);
         await db.dailyRecord.delete({ where: { id: foreign.id } });
       });
@@ -164,7 +166,15 @@ test('revision importer uses real isolated PostgreSQL transactions and preserves
       await t.test('apply archives exact old JSONB, preserves accounts/sessions/prior sources, retains IDs and updates only changed value versions', async () => {
         const protectedBefore = await protectedSnapshot();
         const [before] = await db.$queryRaw`SELECT jsonb_agg(to_jsonb(r) ORDER BY r."id")::text AS "text" FROM "DailyRecord" r`;
+        const otherChallenge = await db.challenge.create({ data: { title: 'Unrelated challenge', year: 2026, startDate: '2026-05-04', endDate: '2026-05-10', enrollmentDeadline: '2026-05-03' } });
+        const unrelated = await db.dailyRecord.create({ data: { challengeId: otherChallenge.id, userId: first.id, date: '2026-05-04', value: 4 } });
+        const unrelatedRevision = await db.recordRevision.create({ data: { recordId: unrelated.id, value: 2, version: 1, actorId: teacher.id, source: 'TEST OTHER CHALLENGE' } });
         applied = await importRevisedParticipationData(db, source, { apply: true });
+        assert.deepEqual(await db.dailyRecord.findUnique({ where: { id: unrelated.id } }), unrelated);
+        assert.deepEqual(await db.recordRevision.findUnique({ where: { id: unrelatedRevision.id } }), unrelatedRevision);
+        await db.recordRevision.delete({ where: { id: unrelatedRevision.id } });
+        await db.dailyRecord.delete({ where: { id: unrelated.id } });
+        await db.challenge.delete({ where: { id: otherChallenge.id } });
         assert.equal(applied.changed, true); assert.equal(applied.previousRecordsArchiveExact, true);
         assert.deepEqual(applied.operations, { inserted: prepared.records.length - 7, changed: 5, unchanged: 2, deleted: 1 });
         assert((await protectedSnapshot()) === protectedBefore, 'All User fields, passwords, Sessions, prior datasets and fitness rows must be unchanged');
@@ -174,6 +184,8 @@ test('revision importer uses real isolated PostgreSQL transactions and preserves
         assert.equal(archive.exact, true); assert.equal(archive.sourceExact, true);
         assert.equal(await db.dailyRecord.count(), prepared.records.length);
         assert.equal(await db.studentSource.count({ where: { datasetId: applied.datasetId } }), 194);
+        assert.equal(await db.challengeMembership.count({ where: { challengeId: LEGACY_CHALLENGE_ID, status: 'active' } }), 194);
+        assert.equal(await db.dailyRecord.count({ where: { challengeId: LEGACY_CHALLENGE_ID } }), prepared.records.length);
         for (const old of originalRecords) {
           const current = await db.dailyRecord.findUnique({ where: { id: old.id } });
           if (old.date === '2026-05-05') { assert.equal(current, null); continue; }
@@ -191,11 +203,42 @@ test('revision importer uses real isolated PostgreSQL transactions and preserves
         assert(!values.some(row => row.date === '2026-09-04'));
       });
 
+      await t.test('pre-challenge revision fingerprints remain valid and other challenge dates stay isolated', async () => {
+        const [saved] = await db.$queryRaw`SELECT "metadataJson"::text AS "text" FROM "SourceDataset" WHERE "id" = ${applied.datasetId}`;
+        const [snapshots] = await db.$queryRaw`SELECT
+          (SELECT jsonb_agg(value - 'challengeId')::text FROM jsonb_array_elements("metadataJson"->'revision'->'previousRecords')) AS "before",
+          (SELECT jsonb_agg(to_jsonb(r) - 'challengeId' ORDER BY r."id")::text FROM "DailyRecord" r WHERE r."challengeId" = ${LEGACY_CHALLENGE_ID}) AS "after"
+          FROM "SourceDataset" WHERE "id" = ${applied.datasetId}`;
+        // This recreates the exact archive shape written before the schema added
+        // challengeId, without converting its precise JSON numbers through JS.
+        await db.$executeRaw`UPDATE "SourceDataset" SET "metadataJson" = jsonb_set("metadataJson", '{revision}',
+          (("metadataJson"->'revision') - 'recordSnapshotVersion' - 'previousRecords' - 'previousRecordsSha256' - 'afterRecordsSha256')
+          || jsonb_build_object('previousRecords', ${snapshots.before}::jsonb, 'previousRecordsSha256', ${hash(snapshots.before)}, 'afterRecordsSha256', ${hash(snapshots.after)}))
+          WHERE "id" = ${applied.datasetId}`;
+        const other = await db.challenge.create({ data: { title: 'Other challenge', year: 2026, startDate: '2026-05-04', endDate: '2026-05-10', enrollmentDeadline: '2026-05-03' } });
+        const foreign = await db.dailyRecord.create({ data: { challengeId: other.id, userId: first.id, date: '2026-05-04', value: 3 } });
+        const before = await snapshot();
+        try {
+          const result = await importRevisedParticipationData(db, source, { apply: true });
+          assert.equal(result.alreadyImported, true); assert.equal(result.changed, false);
+          assert.equal(await snapshot(), before, 'Existing source archive, memberships and other challenge records remain untouched');
+          assert.equal((await db.dailyRecord.findUnique({ where: { id: foreign.id } })).value, 3);
+        } finally {
+          await db.dailyRecord.delete({ where: { id: foreign.id } });
+          await db.challenge.delete({ where: { id: other.id } });
+          await db.$executeRaw`UPDATE "SourceDataset" SET "metadataJson" = ${saved.text}::jsonb WHERE "id" = ${applied.datasetId}`;
+        }
+      });
+
       await t.test('same workbook rerun verifies every field without writes and refuses later changes', async () => {
         const before = await snapshot();
         const rerun = await importRevisedParticipationData(db, source, { apply: true });
         assert.equal(rerun.alreadyImported, true); assert.equal(rerun.changed, false);
         assert((await snapshot()) === before, 'Idempotent rerun must write nothing');
+        const membership = await db.challengeMembership.findUnique({ where: { challengeId_userId: { challengeId: LEGACY_CHALLENGE_ID, userId: first.id } } });
+        await db.challengeMembership.delete({ where: { id: membership.id } });
+        await unchanged(() => importRevisedParticipationData(db, source, { apply: true }), /레거시 참여 정보가 누락/);
+        await db.challengeMembership.create({ data: membership });
         await db.dailyRecord.update({ where: { id: record.id }, data: { value: true, version: { increment: 1 } } });
         await unchanged(() => importRevisedParticipationData(db, source, { apply: true }), /records differ/);
         await db.dailyRecord.update({ where: { id: record.id }, data: { value: false } });

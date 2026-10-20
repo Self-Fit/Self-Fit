@@ -1,5 +1,5 @@
 import webpush from 'web-push';
-import { koreanDate, reminderDecision, getWeekForDate } from './domain/index.js';
+import { koreanDate, reminderDecision, getWeekForDate, challengePhase } from './domain/index.js';
 let pushConfigured=false;
 export function configurePush() {
   if(!process.env.VAPID_PUBLIC_KEY||!process.env.VAPID_PRIVATE_KEY||!process.env.VAPID_SUBJECT) return false;
@@ -7,29 +7,39 @@ export function configurePush() {
   pushConfigured=true;return true;
 }
 export async function createReminderEvents(db,instant=new Date()) {
-  // The function's explicit instant supports isolated rule tests, never HTTP/config date overrides.
+  // The explicit instant is a test seam, never a runtime date override.
   const date=koreanDate(instant);
   const hour=Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Seoul',hour:'2-digit',hourCycle:'h23'}).format(instant));
-  if(date<'2026-05-04'||date>'2026-09-04'||hour<20) return {created:0};
-  const students=await db.user.findMany({where:{role:'student',participating:true},include:{records:true}});
+  if(hour<20) return {created:0};
+  const challenges=await db.challenge.findMany({where:{lifecycle:'published',startDate:{lte:date},endDate:{gte:date}},include:{weeks:{orderBy:{week:'asc'}}}});
   let created=0;
-  for(const user of students) {
-    const decision=reminderDecision(user,user.records,date);
-    if(!decision.send) continue;
-    const remaining=decision.remaining;
-    const body=decision.reason==='missing'?'오늘 운동 기록을 남겨 주세요.':typeof remaining==='number'?`이번 주 목표까지 ${remaining}${getWeekForDate(date)?.unit || ''} 남았어요. 오늘 기록을 확인해 주세요.`:'오늘 목표와 운동 기록을 확인해 주세요.';
-    try {await db.notification.create({data:{userId:user.id,eventKey:`reminder:${user.id}:${date}`,type:'reminder',title:'오늘의 Self Fit',body}});created++;}
-    catch(error) {if(error.code!=='P2002') throw error;}
+  for(const challenge of challenges) {
+    if(challengePhase(challenge,date)!=='active') continue;
+    const members=await db.challengeMembership.findMany({where:{challengeId:challenge.id,status:'active',user:{role:'student'}},include:{user:{include:{records:{where:{challengeId:challenge.id}}}}}});
+    for(const member of members) {
+      const user={...member.user,participating:true},decision=reminderDecision(challenge.weeks,user,user.records,date);
+      if(!decision.send) continue;
+      const remaining=decision.remaining;
+      const body=decision.reason==='missing'?'오늘 운동 기록을 남겨 주세요.':typeof remaining==='number'?`이번 주 목표까지 ${remaining}${getWeekForDate(challenge.weeks,date)?.unit || ''} 남았어요. 오늘 기록을 확인해 주세요.`:'오늘 목표와 운동 기록을 확인해 주세요.';
+      try {await db.notification.create({data:{userId:user.id,eventKey:`reminder:${challenge.id}:${user.id}:${date}`,type:'reminder',title:'오늘의 Self Fit',body}});created++;}
+      catch(error) {if(error.code!=='P2002') throw error;}
+    }
   }
   return {created};
 }
 async function reminderMayBeDelivered(db,event) {
   if(event.type!=='reminder') return true;
-  const instant=new Date();const date=koreanDate(instant);
+  const instant=new Date(),date=koreanDate(instant);
   const hour=Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Seoul',hour:'2-digit',hourCycle:'h23'}).format(instant));
-  if(date<'2026-05-04'||date>'2026-09-04'||hour<20||event.eventKey!==`reminder:${event.userId}:${date}`) return false;
-  const user=await db.user.findUnique({where:{id:event.userId},include:{records:true}});
-  return Boolean(user && reminderDecision(user,user.records,date).send);
+  if(hour<20) return false;
+  const suffix=`:${event.userId}:${date}`;
+  if(!event.eventKey.startsWith('reminder:')||!event.eventKey.endsWith(suffix)) return false;
+  const challengeId=event.eventKey.slice('reminder:'.length,-suffix.length);
+  if(!challengeId) return false; // Old keys remain history; never deliver them again.
+  const challenge=await db.challenge.findUnique({where:{id:challengeId},include:{weeks:{orderBy:{week:'asc'}}}});
+  if(!challenge||challengePhase(challenge,date)!=='active') return false;
+  const member=await db.challengeMembership.findUnique({where:{challengeId_userId:{challengeId,userId:event.userId}},include:{user:{include:{records:{where:{challengeId}}}}}});
+  return Boolean(member?.status==='active' && reminderDecision(challenge.weeks,{...member.user,participating:true},member.user.records,date).send);
 }
 // The optional transport is a dependency seam for isolated tests, not a runtime
 // setting or HTTP API. Production always uses the configured web-push provider.
@@ -55,7 +65,7 @@ export async function deliverPendingPush(db,transport=pushConfigured?((...args)=
       // send to another device. Correction-result events bypass this gate.
       if(!await reminderMayBeDelivered(db,event)) {becameIneligible=true;break;}
       try {
-        await transport({endpoint:subscription.endpoint,keys:{p256dh:subscription.p256dh,auth:subscription.auth}},JSON.stringify({id:event.id,title:event.title,body:event.body,tag:event.id,url:'/mobile/notifications'}),{TTL:24*60*60,timeout:15_000});
+        await transport({endpoint:subscription.endpoint,keys:{p256dh:subscription.p256dh,auth:subscription.auth}},JSON.stringify({id:event.id,title:event.title,body:event.body,tag:event.id,data:event.data || null,url:event.data?.challengeId?'/mobile/challenges':'/mobile/notifications'}),{TTL:24*60*60,timeout:15_000});
         deliveredEndpoints.add(subscription.endpoint);
         await db.notification.update({where:{id:event.id},data:{deliveredEndpoints:[...deliveredEndpoints]}});
       } catch(error) {

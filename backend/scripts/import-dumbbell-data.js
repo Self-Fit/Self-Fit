@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import { buildDumbbellData, DUMBBELL_TRANSFORM } from './dumbbell-data.js';
+import { legacyChallengeId, ensureLegacyMemberships } from './participation-data.js';
 
 function sourceMetadata(source, prepared) {
   return { transform: DUMBBELL_TRANSFORM, summary: prepared.summary, source,
@@ -20,7 +21,7 @@ function sourceRows(prepared, userIds) {
       dailyRows: student.dailyRows, exerciseRows: student.exerciseRows },
   }));
 }
-async function verifySaved(tx, datasetId, source, prepared, userIds) {
+async function verifySaved(tx, datasetId, source, prepared, userIds, challengeId) {
   const metadata = sourceMetadata(source, prepared), rows = sourceRows(prepared, userIds);
   const [datasetCheck] = await tx.$queryRaw`SELECT "filename" = ${source.filename} AS "filenameExact",
     "metadataJson" = ${JSON.stringify(metadata)}::jsonb AS "metadataExact"
@@ -38,10 +39,10 @@ async function verifySaved(tx, datasetId, source, prepared, userIds) {
     SELECT count(*)::int AS "expected", count(*) FILTER (WHERE r."id" IS NULL OR r."value" IS DISTINCT FROM e.row->'value'
       OR r."sourceMetadata" IS DISTINCT FROM e.row->'sourceMetadata')::int AS "mismatches"
     FROM expected e LEFT JOIN "DailyRecord" r ON r."sourceDatasetId" = ${datasetId}
-      AND r."userId" = e.row->>'userId' AND r."date" = e.row->>'date'`;
+      AND r."challengeId" = ${challengeId} AND r."userId" = e.row->>'userId' AND r."date" = e.row->>'date'`;
   assert.equal(recordCheck.expected, prepared.records.length, 'Record verification count differs');
   assert.equal(recordCheck.mismatches, 0, 'Existing records differ from the import; no data will be overwritten');
-  assert.equal(await tx.dailyRecord.count({ where: { sourceDatasetId: datasetId } }), prepared.records.length, 'Unexpected imported record count');
+  assert.equal(await tx.dailyRecord.count({ where: { challengeId, sourceDatasetId: datasetId } }), prepared.records.length, 'Unexpected imported record count');
   return { sourceArchiveExact: true, studentSourceRowsExact: true, recordValuesAndProvenanceExact: true };
 }
 
@@ -51,9 +52,10 @@ export async function importDumbbellData(db, source, { apply = false } = {}) {
   assert.equal(prepared.students.length, 194, 'This workbook must contain all 194 existing students');
   return db.$transaction(async tx => {
     if (!apply) await tx.$executeRawUnsafe('SET TRANSACTION READ ONLY');
+    const challengeId = await legacyChallengeId(tx);
     const users = await tx.user.findMany({
       where: { studentNumber: { in: prepared.students.map(student => student.studentNumber) } },
-      select: { id: true, studentNumber: true, role: true, name: true, grade: true, classNumber: true, participating: true },
+      select: { id: true, studentNumber: true, role: true, name: true, grade: true, classNumber: true, targetType: true, participating: true },
     });
     assert.equal(users.length, prepared.students.length, 'A student account is missing; this importer never creates accounts');
     const byNumber = new Map(users.map(user => [user.studentNumber, user]));
@@ -62,20 +64,23 @@ export async function importDumbbellData(db, source, { apply = false } = {}) {
       assert(user?.role === 'student' && user.name === student.name && user.grade === student.grade && user.classNumber === student.classNumber && user.participating === true,
         'Existing student identity or participation differs from the workbook');
     }
+    await ensureLegacyMemberships(tx, users, { apply: false });
     const userIds = new Map(users.map(user => [user.studentNumber, user.id]));
     const existing = await tx.sourceDataset.findUnique({ where: { hash: source.sha256 }, select: { id: true } });
     if (existing) {
-      const verification = await verifySaved(tx, existing.id, source, prepared, userIds);
+      await ensureLegacyMemberships(tx, users, { apply: false, requireExisting: true });
+      const verification = await verifySaved(tx, existing.id, source, prepared, userIds, challengeId);
       return { mode: apply ? 'apply' : 'dry-run', alreadyImported: true, changed: false, datasetId: existing.id, ...prepared.summary, ...verification };
     }
-    const conflicts = await tx.dailyRecord.count({ where: { userId: { in: users.map(user => user.id) }, date: { in: prepared.summary.dates } } });
+    const conflicts = await tx.dailyRecord.count({ where: { challengeId, userId: { in: users.map(user => user.id) }, date: { in: prepared.summary.dates } } });
     assert.equal(conflicts, 0, 'Week 12 already contains records; aborting without overwriting any date');
-    const recordsBefore = await tx.dailyRecord.count();
+    const recordsBefore = await tx.dailyRecord.count({ where: { challengeId } });
     const plan = { mode: apply ? 'apply' : 'dry-run', sourceHash: source.sha256, ...prepared.summary,
       existingAccountsMatched: users.length, conflicts, recordsBefore, expectedRecordsAfter: recordsBefore + prepared.records.length,
       accountsCreated: 0, passwordsChanged: 0, earlierWeekRecordsChanged: 0, previousFitnessDataChanged: 0,
     };
     if (!apply) return { ...plan, changed: false, readyToApply: true };
+    await ensureLegacyMemberships(tx, users);
     const datasetId = randomUUID(), importedAt = new Date(), metadata = sourceMetadata(source, prepared);
     // JSON text binding preserves decimals in the original cached formulas.
     await tx.$executeRaw`INSERT INTO "SourceDataset" ("id", "hash", "filename", "metadataJson", "importedAt")
@@ -86,12 +91,12 @@ export async function importDumbbellData(db, source, { apply = false } = {}) {
       FROM jsonb_array_elements(${JSON.stringify(rows)}::jsonb) AS source(row)`;
     for (let offset = 0; offset < prepared.records.length; offset += 500) {
       await tx.dailyRecord.createMany({ data: prepared.records.slice(offset, offset + 500).map(record => ({
-        id: randomUUID(), userId: userIds.get(record.studentNumber), date: record.date, value: record.value,
+        id: randomUUID(), challengeId, userId: userIds.get(record.studentNumber), date: record.date, value: record.value,
         sourceDatasetId: datasetId, sourceMetadata: record.sourceMetadata, createdAt: importedAt, updatedAt: importedAt,
       })) });
     }
-    const verification = await verifySaved(tx, datasetId, source, prepared, userIds);
-    assert.equal(await tx.dailyRecord.count(), plan.expectedRecordsAfter, 'Record count after import differs');
+    const verification = await verifySaved(tx, datasetId, source, prepared, userIds, challengeId);
+    assert.equal(await tx.dailyRecord.count({ where: { challengeId } }), plan.expectedRecordsAfter, 'Record count after import differs');
     return { ...plan, changed: true, datasetId, importedAt: importedAt.toISOString(), ...verification };
   }, { isolationLevel: apply ? 'Serializable' : 'RepeatableRead', timeout: 120000 });
 }

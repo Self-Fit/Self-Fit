@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 import { buildRevisedParticipationData, REVISED_PARTICIPATION_TRANSFORM } from '../scripts/revised-participation-data.js';
-import { WEEKS, DUMBBELL_EXERCISES, activityDates, getWeekForDate, summarizeProgram } from '../src/domain/index.js';
+import { LEGACY_WEEKS, LEGACY_DUMBBELL_EXERCISES, activityDates, getWeekForDate, summarizeProgram } from '../src/domain/index.js';
 
 const labels = { walking: '걸음 구간', check: '수행 여부', count: '횟수', distance: '거리', dumbbell: '운동별 완료 세트' };
 const bands = ['0~1,999보', '2,000~3,999보', '4,000~5,999보', '6,000~7,999보', '8,000~9,999보', '10,000보 이상'];
@@ -29,28 +29,28 @@ export function makeRevisedSourceFixture(count = 2) {
     운영기준: Array.from({ length: 17 }, () => Array(11).fill(null)),
   };
   sheets.달성률요약[4] = ['대상', '참여 학생 수', '완료 주수 합계', '가능 주수', '달성률', '전체 완료분 비중', null, null, null];
-  sheets.학생별현황[4] = ['학번', '이름', '학년', '반', '대상 구분', '1학기 점수(실제)', '1학기 등급(실제)', '2학기 점수(실제)', '2학기 등급(실제)', '점수 변화(실제)', ...WEEKS.map(w => `${w.week}주차`), '완료 주수(자동)', '전체 주수', '달성률(자동)', '비고', '참여 여부'];
+  sheets.학생별현황[4] = ['학번', '이름', '학년', '반', '대상 구분', '1학기 점수(실제)', '1학기 등급(실제)', '2학기 점수(실제)', '2학기 등급(실제)', '점수 변화(실제)', ...LEGACY_WEEKS.map(w => `${w.week}주차`), '완료 주수(자동)', '전체 주수', '달성률(자동)', '비고', '참여 여부'];
   sheets.날짜별기록[4] = ['학번', '활동일', '요일', '주차', '운동', '날짜 구분', '입력 형식', '입력값', '단위', '기록 상태(자동)', '비고', '최초등록일시(선택)', '최종수정일시(선택)', '기록 여부(자동)', '주간 합산값(자동)'];
   sheets.덤벨운동기록[4] = ['학번', '활동일', '운동 식별값', '완료 세트', '운동명', '목표 세트(자동)', '기록 여부(자동)', '목표 충족(자동)', '자료 종류', '비고'];
   sheets.운영기준[4] = ['주차', '시작일', '종료일', '운동', '입력 형식', '주간 완료 기준값', '단위', '완료 조건', null, '덤벨 기준', '값'];
-  for (const week of WEEKS) sheets.운영기준[week.week + 4] = [week.week, week.startDate, week.endDate, week.title, labels[week.inputType], week.weeklyTarget, week.unit, week.description, null, null, null];
+  for (const week of LEGACY_WEEKS) sheets.운영기준[week.week + 4] = [week.week, week.startDate, week.endDate, week.title, labels[week.inputType], week.weeklyTarget, week.unit, week.description, null, null, null];
   [['세트당 반복 수', 10], ['운동별 목표 세트', 2], ['하루 필수 운동 수', 3]].forEach((pair, index) => sheets.운영기준[index + 5].splice(9, 2, ...pair));
   const summaries = [];
   for (let index = 0; index < count; index++) {
     const studentNumber = String(10001 + index), records = [], target = index % 2 === 0 ? '필수' : '선택';
-    for (const week of WEEKS) for (const [day, date] of activityDates(week).entries()) {
+    for (const week of LEGACY_WEEKS) for (const [day, date] of activityDates(LEGACY_WEEKS, week).entries()) {
       const value = valueFor(index, week.week, day), submitted = value !== null;
       const achieved = week.inputType === 'dumbbell' && submitted ? Object.values(value).every(sets => sets >= 2) : false;
       const input = value === null ? null : week.inputType === 'walking' ? bands[value] : week.inputType === 'check' ? value ? '했음' : '안 했음' : week.inputType === 'dumbbell' ? Number(achieved) : value;
       const contribution = !submitted ? 0 : week.inputType === 'walking' ? Number(value === 5) : week.inputType === 'check' ? Number(value) : week.inputType === 'dumbbell' ? Number(achieved) : value;
       sheets.날짜별기록.push([studentNumber, date, '월화수목금토일'[day], week.week, week.title, day < 5 ? '평일' : '주말·보충', week.inputType === 'dumbbell' ? '세 운동 충족 여부(자동)' : labels[week.inputType], input, ({ walking: '구간', check: '체크', dumbbell: '완료일' }[week.inputType] ?? week.unit), submitted ? '기록 있음' : '미입력', !submitted ? '검증용 가상 부상 휴식' : null, null, null, Number(submitted), contribution]);
       if (submitted) records.push({ date, value });
-      if (week.week === 12) for (const exercise of DUMBBELL_EXERCISES) {
+      if (week.week === 12) for (const exercise of LEGACY_DUMBBELL_EXERCISES) {
         const sets = value?.[exercise.id] ?? null;
         sheets.덤벨운동기록.push([studentNumber, date, exercise.id, sets, exercise.title, 2, Number(sets !== null), Number(sets !== null && sets >= 2), '가상', sets === null ? '검증용 종목 미입력' : null]);
       }
     }
-    const summary = summarizeProgram(records);
+    const summary = summarizeProgram(LEGACY_WEEKS, records);
     summaries.push({ target, summary });
     sheets.학생별현황.push([studentNumber, `Fixture Student ${index + 1}`, 1, 1, target, 30.125, 3, 32.625, 3, 2.5, ...summary.weeks.map(week => Number(week.complete)), summary.completedWeeks, 12, summary.progress, '자동화 테스트 전용 가상 자료', '참여']);
   }
@@ -63,7 +63,7 @@ export function makeRevisedSourceFixture(count = 2) {
   sheets.달성률요약[10][0] = '필수·선택 달성률 차이';
   sheets.달성률요약[10][2] = ((sheets.달성률요약[5][4] ?? 0) - (sheets.달성률요약[6][4] ?? 0)) * 100;
   sheets.달성률요약[15] = ['주차', '운동', '필수 완료 학생', '선택 완료 학생', '전체 완료 학생', '참여 학생 수', '전체 달성률', '필수 달성률', '선택 달성률'];
-  for (const [index, week] of WEEKS.entries()) {
+  for (const [index, week] of LEGACY_WEEKS.entries()) {
     const completed = groups.map(group => group.members.filter(item => item.summary.weeks[index].complete).length);
     sheets.달성률요약[index + 16] = [week.week, week.title, ...completed, completed[0] + completed[1], count, (completed[0] + completed[1]) / count, groups[0].members.length ? completed[0] / groups[0].members.length : null, groups[1].members.length ? completed[1] / groups[1].members.length : null];
   }
@@ -98,7 +98,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     for (const record of result.records) {
       assert.equal(record.sourceMetadata.transform, REVISED_PARTICIPATION_TRANSFORM);
       assert.equal(record.date, source.sheets.날짜별기록[record.sourceMetadata.sourceRow - 1][1]);
-      assert.equal(record.sourceMetadata.week, getWeekForDate(record.date).week);
+      assert.equal(record.sourceMetadata.week, getWeekForDate(LEGACY_WEEKS, record.date).week);
       assert.equal(record.sourceMetadata.originalCreatedAt, null);
     }
   });
