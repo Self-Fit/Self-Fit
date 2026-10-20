@@ -48,15 +48,21 @@ export async function deliverPendingPush(db,transport=pushConfigured?((...args)=
     }
     let transientFailure=false;
     let becameIneligible=false;
+    let hasSubscription=false;
     const deliveredEndpoints=new Set(event.deliveredEndpoints || []);
     for(const subscription of event.user.subscriptions) {
-      if(deliveredEndpoints.has(subscription.endpoint)) continue;
       // Recheck immediately before every device send, including after a slow
       // send to another device. Correction-result events bypass this gate.
       if(!await reminderMayBeDelivered(db,event)) {becameIneligible=true;break;}
+      // Logout or device removal can revoke a subscription after the queue was
+      // loaded. A replacement subscription must not inherit an older event.
+      const current=await db.pushSubscription.findFirst({where:{id:subscription.id,userId:event.userId,endpoint:subscription.endpoint}});
+      if(!current) continue;
+      hasSubscription=true;
+      if(deliveredEndpoints.has(current.endpoint)) continue;
       try {
-        await transport({endpoint:subscription.endpoint,keys:{p256dh:subscription.p256dh,auth:subscription.auth}},JSON.stringify({id:event.id,title:event.title,body:event.body,tag:event.id,url:'/mobile/notifications'}),{TTL:24*60*60,timeout:15_000});
-        deliveredEndpoints.add(subscription.endpoint);
+        await transport({endpoint:current.endpoint,keys:{p256dh:current.p256dh,auth:current.auth}},JSON.stringify({id:event.id,title:event.title,body:event.body,tag:event.id,url:'/mobile/notifications'}),{TTL:24*60*60,timeout:15_000});
+        deliveredEndpoints.add(current.endpoint);
         await db.notification.update({where:{id:event.id},data:{deliveredEndpoints:[...deliveredEndpoints]}});
       } catch(error) {
         if([404,410].includes(error.statusCode)) await db.pushSubscription.deleteMany({where:{id:subscription.id}});
@@ -65,7 +71,7 @@ export async function deliverPendingPush(db,transport=pushConfigured?((...args)=
     }
     if(becameIneligible) {await db.notification.updateMany({where:{id:event.id},data:{pushState:'cancelled'}});cancelled++;continue;}
     const exhausted=event.attempts+1>=5;
-    await db.notification.update({where:{id:event.id},data:{pushState:transientFailure?(exhausted?'failed':'retry'):event.user.subscriptions.length?'sent':'no_subscription',nextTryAt:new Date(Date.now()+Math.min(60,event.attempts*5+1)*60*1000)}});
+    await db.notification.update({where:{id:event.id},data:{pushState:transientFailure?(exhausted?'failed':'retry'):hasSubscription?'sent':'no_subscription',nextTryAt:new Date(Date.now()+Math.min(60,event.attempts*5+1)*60*1000)}});
     if(!transientFailure) delivered++;
   }
   return {delivered,cancelled};

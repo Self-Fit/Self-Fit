@@ -1,9 +1,10 @@
-import React,{useCallback,useEffect} from 'react';
+import React,{useCallback,useEffect,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {SessionProvider,useSession,useLocation,navigate,api,Loading,ErrorNotice,Brand,DesignTemplate,templates} from './shared';
 import {Login,PasswordChange} from './auth';
 import StudentApp from './student';
 import TeacherApp from './teacher';
+import {logoutWithPush,reconcilePush} from './push.js';
 import './design.css';
 import './app.css';
 
@@ -14,9 +15,10 @@ function DesignPreview({id}) {
 }
 function ModePicker(){return <main className="mode-picker card"><div className="center"><Brand large/><h1 className="mt16">Self Fit 챌린지</h1><p className="fs14 muted mt8">사용할 화면을 선택해 주세요.</p></div><div className="stack gap12 mt24"><button className="btn primary lg block" onClick={()=>navigate('/web')}>웹 화면</button><button className="btn secondary lg block" onClick={()=>navigate('/mobile')}>모바일 화면</button></div></main>;}
 function App(){const location=useLocation();const {user,loading,error}=useSession();const pathname=location.split('?')[0];const match=pathname.match(/^\/(web|mobile)(\/.*)?$/);const design=pathname.match(/^\/design\/([MW][ST]-\d{2})$/);const mode=match?.[1];const path=match?.[2]||'/';
-  const role=user?.role;
+  const role=user?.role;const [pushError,setPushError]=useState(null);
   // Keep the identity stable: template-driven screens rebuild their DOM whenever this prop changes.
-  const logout=useCallback(async()=>{await api('/auth/logout',{method:'POST',body:{}});window.location.assign(`/${mode}${role==='teacher'?'/admin':''}/login`);},[mode,role]);
+  const logout=useCallback(async()=>{await logoutWithPush(api);window.location.assign(`/${mode}${role==='teacher'?'/admin':''}/login`);},[mode,role]);
+  useEffect(()=>{let active=true;setPushError(null);if(user)reconcilePush(api,user,{isCurrent:()=>active}).catch(()=>{if(active)setPushError(new Error('브라우저 알림을 확인하지 못했어요. 알림 설정에서 다시 시도해 주세요.'));});return()=>{active=false;};},[user?.id,role,user?.mustChangePassword]);
   useEffect(()=>{document.title=design?`${design[1]} · Self Fit 디자인 검수`:'Self Fit 챌린지';},[pathname]);
   if(design)return <DesignPreview id={design[1]}/>;
   if(pathname==='/design')return <DesignPreview id="MS-09"/>;
@@ -25,7 +27,7 @@ function App(){const location=useLocation();const {user,loading,error}=useSessio
   if(error)return <div className="mode-picker"><ErrorNotice error={error} retry={()=>window.location.reload()}/></div>;
   if(!user)return <Login mode={mode} teacher={path.startsWith('/admin')}/>;
   if(user.mustChangePassword||path==='/password/setup'||path==='/password')return <PasswordChange mode={mode} first={user.mustChangePassword}/>;
-  if(user.role==='teacher')return <TeacherApp {...{mode,user}} onLogout={logout}/>;
-  return <StudentApp {...{mode,user,path}} onLogout={logout}/>;
+  if(user.role==='teacher')return <>{pushError&&<ErrorNotice error={pushError}/>}<TeacherApp {...{mode,user}} onLogout={logout}/></>;
+  return <>{pushError&&<ErrorNotice error={pushError}/>}<StudentApp {...{mode,user,path}} onLogout={logout}/></>;
 }
 createRoot(document.getElementById('root')).render(<SessionProvider><App/></SessionProvider>);

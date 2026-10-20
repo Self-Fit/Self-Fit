@@ -97,6 +97,11 @@ export function studentRouter(db) {
     if(typeof req.body?.weekendReminder!=='boolean') fail(400,'INVALID_INPUT','주말 보충 알림 설정을 확인해 주세요.');
     res.json(settings(await db.user.update({where:{id:req.user.id},data:{weekendReminder:req.body.weekendReminder}})));
   });
+  router.post('/push-subscriptions/status',async(req,res)=>{
+    const endpoint=requiredText(req.body?.endpoint,'푸시 주소',2048);
+    const subscription=await db.pushSubscription.findFirst({where:{userId:req.user.id,endpoint},select:{id:true}});
+    res.json({registered:Boolean(subscription)});
+  });
   router.post('/push-subscriptions',async(req,res)=>{
     const endpoint=requiredText(req.body?.endpoint,'푸시 주소',2048);
     let url; try {url=new URL(endpoint);} catch {fail(400,'INVALID_PUSH','푸시 구독 주소가 올바르지 않습니다.');}

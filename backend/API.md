@@ -10,7 +10,7 @@ Values: walking integer band `0..5`; check boolean; counts nonnegative integer; 
 
 - `POST /auth/login {studentNumber,password}` → `{user}`. Teacher uses its configured account identifier in studentNumber. Failed attempts are limited to 10 per account and 300 per client address in 15 minutes (429 `RATE_LIMITED`); successful logins do not count. Set `TRUST_PROXY` behind a reverse proxy.
 - `GET /auth/me` → `{user}`. 401 when unauthenticated.
-- `POST /auth/logout {}` → `{ok:true}`.
+- `POST /auth/logout {pushEndpoint?}` → `{ok:true}`. The optional current-device endpoint is revoked only when owned by the authenticated account, atomically with its session. Other devices are preserved. The endpoint may be omitted; anonymous logout is also supported.
 - `POST /auth/change-password {currentPassword?,newPassword}` → `{user}`. 8–128 characters including English letters and digits, must differ from student number. `currentPassword` is optional only for authenticated first-login temporary-password sessions. First-login accounts can only use auth endpoints until changed.
 - `GET /health` → database readiness only; no account details.
 
@@ -30,6 +30,7 @@ Values: walking integer band `0..5`; check boolean; counts nonnegative integer; 
 - `GET /student/settings` → `{weekendReminder,pushEnabled,pushPublicKey}`.
 - `PATCH /student/settings {weekendReminder}` → same settings.
 - `POST /student/push-subscriptions {endpoint,keys:{p256dh,auth}}` → `{ok:true}`.
+- `POST /student/push-subscriptions/status {endpoint}` → `{registered:boolean}`. True only when this exact endpoint belongs to the authenticated student; no other account details are returned. Browser permission alone does not establish account ownership.
 - `DELETE /student/push-subscriptions {endpoint}` → `{ok:true}`.
 - `POST /student/records/:date/attachments` multipart field `file` → `{attachment}`. Record must already exist. Images max 3×10MB, video max 1×100MB/60 seconds; same-day start. Numeric record is preserved on upload failure.
 - `DELETE /student/records/:date/attachments/:id` → `{ok:true}`. Same-day only.
@@ -61,5 +62,7 @@ Common filters: `search,grade,classNumber,targetType,participating,achievement` 
 `DATABASE_URL`, `APP_ORIGIN` (default http://localhost:5173), `PORT` (4000), `HOST` (127.0.0.1), `STORAGE_DIR` private absolute path, `FFPROBE_PATH` optional, `TRUST_PROXY` optional (Express trust-proxy value behind a reverse proxy), `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` optional. Push configuration absence never blocks app notifications. Reminder scheduler runs each minute, Korea 20:00 onwards on eligible activity dates, event uniqueness `(user,date,type)` prevents duplicates. It never sends exercise reminders after 2026-09-04. No automatic data/media deletion policy.
 
 Immediately before each reminder push (including retries), the server rechecks the current Korea date, same-day event identity, participation, weekly completion, daily input and weekend setting. Obsolete reminder pushes become `cancelled`; their in-app event history remains. Correction-result pushes bypass exercise eligibility and may be sent after the program ends.
+
+Before each device send, the server also rechecks subscription identity and ownership so a queued snapshot cannot send to a device already revoked by logout or removal.
 
 Initialize schema `npm run db:deploy`, then run `npm run bootstrap-teacher` in a terminal to enter the one real teacher's ID, name and hidden password. `TEACHER_ID`, `TEACHER_NAME`, and `TEACHER_PASSWORD` env or stdin JSON are also supported. Backend reads `backend/.env`. Never pass passwords on CLI args. No seed users or activity are installed.

@@ -53,7 +53,11 @@ export function authRouter(db) {
   });
   router.get('/me',requireUser,(req,res)=>res.json({user:userDto(req.user)}));
   router.post('/logout',async(req,res)=>{
-    if(req.sessionId) await db.session.deleteMany({where:{id:req.sessionId}});
+    const pushEndpoint=req.user&&req.body?.pushEndpoint!==undefined?requiredText(req.body.pushEndpoint,'푸시 주소',2048):null;
+    if(req.sessionId) await db.$transaction(async tx=>{
+      if(pushEndpoint) await tx.pushSubscription.deleteMany({where:{userId:req.user.id,endpoint:pushEndpoint}});
+      await tx.session.deleteMany({where:{id:req.sessionId}});
+    });
     res.clearCookie(COOKIE,{...cookieOptions(),maxAge:undefined}).json({ok:true});
   });
   router.post('/change-password',requireUser,async(req,res)=>{
