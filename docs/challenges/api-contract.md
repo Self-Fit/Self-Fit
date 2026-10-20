@@ -29,12 +29,12 @@ Membership = {
   id, challengeId,
   user: User,                     // 교사 응답에만. 학생 응답은 user 없음
   mode: 'forced'|'invited', status: 'active'|'pending'|'declined'|'removed',
-  invitedAt, respondedAt: null|ISO, invitedBy: { id, name }
+  invitedAt, respondedAt: null|ISO, invitedBy: null|{ id, name }
 }
 MembershipSelf = { mode, status, invitedAt, respondedAt }
 ```
 
-`User`, `Record`, `Correction`, `WeekSummary`, `Summary`는 기존 API.md 정의 그대로.
+`User`, `Record`, `Correction`, `WeekSummary`, `Summary`는 기존 API.md 정의 그대로. `Membership.user.participating` 및 참여자 미리보기의 `User.participating`은 해당 챌린지의 `active` 참여 여부다. 명단의 `targetType`·학년·반은 바꾸지 않으며, 일반 `/teacher/students`·`/auth/me`의 `User.participating`은 기존 계정 값을 유지한다. `Membership.invitedBy`는 교사 없이 이관된 레거시 참여나 초대한 교사 계정이 삭제된 경우 `null`이며, 새 교사 등록·초대 응답에는 `{id,name}`을 제공한다.
 
 ## 주차 검증 규칙 (`400 INVALID_CHALLENGE`, `details:[{path,message}]`)
 - `title` 1–60자, `description` 0–500자, `startDate <= endDate`, 기간 최대 365일, `enrollmentDeadline`은 `startDate` 전날 이하가 기본이며 `endDate` 이하까지 허용.
@@ -65,12 +65,14 @@ MembershipSelf = { mode, status, invitedAt, respondedAt }
 | `POST /teacher/challenges/:id/members` | `{mode:'forced'\|'invited', studentIds?:[id], filters?:{…}}` | `201 {added:[Membership], skipped:[{userId,studentNumber,name,reason}]}` | `409 CHALLENGE_NOT_PUBLISHED`, `409 ENROLLMENT_CLOSED`(초대인데 마감 지남 / 강제인데 endDate 지남) |
 | `DELETE /teacher/challenges/:id/members/:userId` | | `{ok:true}` status=removed | `404 NOT_MEMBER`, `409 HAS_RECORDS` |
 
+`GET …/members`의 `stats`는 `grade`·`classNumber`·`targetType`·`search`로 고른 명단 범위의 모든 참여 상태를 집계한다. `status`·`mode`는 `members` 목록만 좁히며 통계에는 적용하지 않는다. `removed`는 별도 상태 수로 표시하고 `forced`·`invited` 합계에서는 제외한다.
+
 `POST …/members` 규칙(학생 1명 단위, 전체는 한 트랜잭션):
 - 참여 없음 → 생성. `forced`면 `active`, `invited`면 `pending`.
 - `pending` + `forced` 요청 → mode=forced, status=active (강제 전환). `pending` + `invited` → `skipped: already_pending`.
 - `declined` + `invited` → `pending`으로 재초대(invitedAt 갱신). `declined` + `forced` → forced/active.
 - `active` → `skipped: already_active`. `removed` → 다시 생성 규칙 적용. 존재하지 않는 학생 → `skipped: not_found`. 교사 id → `skipped: not_student`.
-- 초대 생성·재초대마다 학생 알림 `type:'invitation'` 1건(`eventKey: invitation:<membershipId>:<invitedAt>`), 강제 등록은 `type:'enrollment'` 알림 1건.
+- 초대 생성·재초대마다 학생 알림 `type:'invitation'` 1건(`eventKey: invitation:<membershipId>:<invitedAt>`), 강제 등록은 `type:'enrollment'` 알림 1건. 강제 등록 이벤트 키는 `enrollment:<membershipId>`이며, 같은 참여 행을 제외 후 다시 강제 등록해도 기존 이벤트 1건을 유지한다.
 
 ### 기존 교사 API에 추가되는 `challengeId`
 `GET /teacher/overview`, `/teacher/participation`, `/teacher/export`, `/teacher/corrections`, `/teacher/students/:id`에 `challengeId` 쿼리를 추가한다.
@@ -93,9 +95,11 @@ MembershipSelf = { mode, status, invitedAt, respondedAt }
 | `POST /student/challenges/:id/records/:date/attachments`, `DELETE …/attachments/:aid` | 기존과 동일 | | |
 | `GET /student/corrections`, `/student/notifications*`, `/student/settings*`, `/student/push-subscriptions` | 변경 없음(계정 단위). `Correction`에 `challengeId` 필드 추가 | | |
 
-레거시 경로 `GET /student/dashboard`, `/student/records*`, `/program`, `POST /student/enroll`은 phase 3까지 유지하며 "현재 챌린지"로 해석한다.
-`/student/enroll`은 현재 챌린지에 `pending` 초대가 있으면 `accept`와 같고, 없으면 기존처럼 `403 ENROLLMENT_CLOSED`.
+레거시 조회·기록 경로 `GET /student/dashboard`, `/student/records*`, `/program`은 phase 3까지 유지하며 "현재 챌린지"로 해석한다. 참여 신청 호환 경로도 아래 규칙으로 유지한다.
+`POST /student/enroll {}`은 기존 응답 `{user:User}`를 유지한다. 이 호환 경로는 현재 챌린지 resolver와 별개로, 게시된 챌린지의 `mode=invited,status=pending` 중 오늘이 `enrollmentDeadline` 이하인 초대를 찾는다. 수락 가능한 초대가 0개면 기존 `403 ENROLLMENT_CLOSED`, 1개면 그 초대를 수락하고 해당 챌린지 참여가 반영된 `user`를 반환한다. 2개 이상이면 아무 초대도 변경하지 않고 `409 INVITATION_SELECTION_REQUIRED`, `details:{challengeIds:[id,...]}`를 반환한다. 클라이언트는 초대 선택을 안내하고 `POST /student/challenges/:id/accept`로 명시적으로 수락한다.
 `/program` 응답에는 `challengeId`가 추가된다.
+
+학생 목록 응답의 `current.challenge`, `challenges[].challenge`, `invitations[].challenge`는 `ChallengeSummary`다. 학생 상세 `GET /student/challenges/:id`와 학생 대시보드의 `challenge`는 `weeks`·`activityDates`를 포함하는 `Challenge`다. 게시된 챌린지 상세는 초대 미수락 학생도 볼 수 있지만, 대시보드·기록·정정·첨부 변경은 해당 챌린지의 `active` 참여를 요구한다.
 
 알림 `Notification`에 `data: null|{challengeId, membershipId}`가 추가된다(초대·등록 알림만 값이 있음).
 
@@ -110,6 +114,7 @@ MembershipSelf = { mode, status, invitedAt, respondedAt }
 | `ENROLLMENT_CLOSED` | 409 | 초대 마감/종료 후 등록 시도 |
 | `INVITATION_CLOSED` | 409 | 학생이 마감 후 수락 |
 | `NO_INVITATION` | 404 | 대기 중 초대 없음 |
+| `INVITATION_SELECTION_REQUIRED` | 409 | 호환 enroll에 수락 가능한 초대가 여러 개라 선택 필요. `details:{challengeIds:[id,...]}` |
 | `NOT_MEMBER` | 403 | active 참여자가 아닌 학생의 기록 접근 |
 | `HAS_RECORDS` | 409 | 기록이 있는 참여자 제외 |
 
