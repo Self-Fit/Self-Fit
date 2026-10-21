@@ -225,6 +225,31 @@ export async function runChallengeApiCases(t, { db, request, teacherCookie, a, b
       } finally { t.mock.timers.reset(); }
     });
 
+    await t.test('archiving while a correction is being approved never changes the archived record', async () => {
+      const challenge = await create(makeInput());
+      assert.equal((await teacher(`/teacher/challenges/${challenge.id}/publish`, { method: 'POST', body: {} })).status, 200);
+      await db.challengeMembership.create({ data: { challengeId: challenge.id, userId: a.id, mode: 'forced', status: 'active' } });
+      const record = await db.dailyRecord.create({ data: { challengeId: challenge.id, userId: a.id, date: '2026-06-08', value: 10 } });
+      const correction = await db.correction.create({ data: { recordId: record.id, requesterId: a.id, beforeValue: 10, requestedValue: 20, baseVersion: record.version, reason: '동시 처리 검사' } });
+      // Archive holds the challenge row; the approval must wait for it and then refuse.
+      let release;
+      const held = new Promise(resolve => { release = resolve; });
+      const archiving = db.$transaction(async tx => {
+        await tx.$queryRaw`SELECT id FROM "Challenge" WHERE id = ${challenge.id} FOR UPDATE`;
+        await tx.challenge.update({ where: { id: challenge.id }, data: { lifecycle: 'archived' } });
+        await held;
+      }, { timeout: 10000 });
+      const approving = teacher(`/teacher/corrections/${correction.id}/approve`, { method: 'POST', body: {} });
+      await new Promise(resolve => setTimeout(resolve, 300));
+      release();
+      await archiving;
+      const approved = await approving;
+      assert.equal(approved.status, 409, JSON.stringify(approved.data));
+      assert.ok(['CHALLENGE_ARCHIVED', 'CONFLICT'].includes(approved.data.error.code));
+      assert.equal((await db.dailyRecord.findUnique({ where: { id: record.id } })).value, 10);
+      assert.equal((await db.correction.findUnique({ where: { id: correction.id } })).status, 'pending');
+    });
+
     await t.test('archiving during an accepted multipart upload rejects commit and removes staged and stored files', async () => {
       const sessionIds = [];
       let student, upload, responsePromise;

@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
 import { Icon, navigate, useLocation } from '../shared.jsx';
-import { getChallenge, listChallenges } from './index.js';
+import { CHALLENGES_CHANGED, getChallenge, listChallenges } from './index.js';
 import { useLoad } from './ui.jsx';
 import { programOf } from './program.js';
 
@@ -24,6 +24,13 @@ export function TeacherChallengeProvider({ scoped, children }) {
   const id = selectedId || current?.id || null;
   const detail = useLoad(() => (id ? getChallenge(id) : Promise.resolve(null)), [id]);
   const challenge = detail.data?.challenge?.id === id ? detail.data.challenge : null;
+  const { refresh: refreshList } = list, { refresh: refreshDetail } = detail;
+  useEffect(() => {
+    // A challenge created, published or archived in the editor shows up here without a page reload.
+    const reload = () => { refreshList(); refreshDetail(); };
+    window.addEventListener(CHALLENGES_CHANGED, reload);
+    return () => window.removeEventListener(CHALLENGES_CHANGED, reload);
+  }, [refreshList, refreshDetail]);
 
   const withChallenge = useCallback((path, nextId) => {
     const [base, query = ''] = path.split('?');

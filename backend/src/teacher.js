@@ -128,6 +128,8 @@ export function teacherRouter(db) {
       const correction=await tx.correction.findUnique({where:{id:req.params.id},include:{record:true}});
       if(!correction) fail(404,'NOT_FOUND','정정 요청을 찾을 수 없습니다.');
       if(correction.status!=='pending') fail(409,'ALREADY_DECIDED','이미 처리된 정정 요청입니다.');
+      // Share-lock the challenge until commit, as record writes do, so archiving cannot land between this check and the update.
+      await tx.$queryRaw`SELECT id FROM "Challenge" WHERE id = ${correction.record.challengeId} FOR SHARE`;
       const challenge=await loadChallenge(tx,correction.record.challengeId);
       if(challenge.lifecycle==='archived') fail(409,'CHALLENGE_ARCHIVED','보관된 챌린지의 기록은 바꿀 수 없어요. 정정 요청은 반려만 할 수 있어요.');
       checkValue(challenge,correction.record.date,correction.requestedValue);
