@@ -140,6 +140,7 @@ export default function ChallengeEditor({ mode, id }) {
       <MockNotice />
       {from === 'template' && challenge?.lifecycle === 'draft' && <div className="banner g"><Icon name="history" /><span>양식에서 복사한 초안이에요. 주차 날짜를 새 시작일에 맞춰 옮겼어요. 내용을 확인한 뒤 게시하세요.</span></div>}
       {challenge?.lifecycle === 'draft' && dirty && <div className="banner line"><Icon name="info" /><span>게시하려면 먼저 변경 내용을 저장해 주세요.</span></div>}
+      {challenge && editingStructure && isDate(deadline) && deadline < challenge.today && <div className="banner warn" role="alert"><Icon name="info" /><span>초대 마감일({fullDate(deadline)})이 이미 지나 학생을 초대할 수 없어요. 초대하려면 마감일을 오늘({fullDate(challenge.today)}) 이후로 바꿔 주세요. 강제 등록은 종료일까지 할 수 있어요.</span></div>}
       {challenge?.lifecycle === 'published' && challenge.phase === 'upcoming' && <div className="banner blue"><Icon name="calendar" /><span>게시된 챌린지예요. 시작일({dateText(challenge.startDate)}) 전까지 기간과 주차 구성을 바꿀 수 있어요.</span></div>}
       {lock === 'structure' && <div className="banner warn"><Icon name="lock" /><span>시작된 챌린지라 기간과 주차 구성은 바꿀 수 없어요. 제목·설명과 주차 이름·설명·색만 수정할 수 있어요.</span></div>}
       {notice && <ErrorNotice error={notice} />}

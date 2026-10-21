@@ -21,6 +21,6 @@ export function weekLabel(week, summary, today) {
   return `${today <= week.endDate ? '이번 주' : '미완료'} · ${formatNumber(summary.total)} / ${formatNumber(week.weeklyTarget)}${week.unit}`;
 }
 export function statusLabel(status) { return ({future:'예정',missing:'미입력',achieved:'목표 달성',below_target:'목표 미달',recorded:'기록 있음',zero:'0 기록',pending:'확인 중',inactive:'활동일 아님',invalid:'확인 필요'})[status] || status; }
-export const programLabel = program => ({upcoming:'시작 전',active:'진행 중',rest:'쉬는 주',ended:'프로그램 종료'})[program?.status] || '';
+export const programLabel = program => ({upcoming:'시작 전',active:'진행 중',rest:'쉬는 기간',ended:'챌린지 종료'})[program?.status] || '';
 
 export function dailyAchieved(week, value) { return isDumbbell(week) ? dumbbellSummary(week, value).complete : week.inputType === 'walking' ? value === 5 : week.inputType === 'check' ? value === true : week.dailyTarget ? Number(value) >= week.dailyTarget : Number(value) > 0; }
