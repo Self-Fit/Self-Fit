@@ -45,7 +45,8 @@ test('challenge migration backfills existing data exactly and enforces challenge
       const source = await db.sourceDataset.create({ data: { hash: 'a'.repeat(64), filename: 'TEST-LEGACY.xlsx', metadataJson: {} } });
       await db.$executeRaw`UPDATE "SourceDataset" SET "metadataJson" = '{"original":0.12345678901234567890123456789,"revision":{"afterRecordsSha256":"TEST-IMMUTABLE-FINGERPRINT"}}'::jsonb WHERE "id" = ${source.id}`;
       await db.studentSource.create({ data: { datasetId: source.id, userId: required.id, rosterJson: ['TEST ONLY'], fitnessJson: { score: 30.25 } } });
-      await db.session.create({ data: { id: 'TEST-IMMUTABLE-SESSION', userId: required.id, expiresAt: new Date('2030-01-01T00:00:00Z') } });
+      // Session gains push device columns in a later migration, so insert the old shape directly.
+      await db.$executeRaw`INSERT INTO "Session" ("id", "userId", "expiresAt") VALUES ('TEST-IMMUTABLE-SESSION', ${required.id}, '2030-01-01T00:00:00Z')`;
       // Current Prisma expects challengeId; raw inserts reproduce the actual old schema.
       for (const [index, item] of [
         ...['2026-05-04', '2026-05-05', '2026-05-06', '2026-05-07', '2026-05-08'].map(date => ({ date, value: 5 })),

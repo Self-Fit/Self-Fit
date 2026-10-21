@@ -7,6 +7,7 @@ import { studentContext } from './challenge-context.js';
 import { acceptOnlyInvitation, membershipSelf } from './memberships.js';
 import { challengeDto } from './challenges.js';
 import { userDto, recordDto, correctionDto, programDto, recordsWithAttachments } from './dto.js';
+import { ensurePushDeviceHash, requirePushSession } from './push-device.js';
 export function checkValue(challenge,date,value) {
   const week=getWeekForDate(challenge.weeks,date);
   if(!week) fail(400,'INACTIVE_DATE','활동 기간에 포함되지 않는 날짜입니다.');
@@ -122,6 +123,19 @@ export function studentRouter(db) {
     if(typeof req.body?.weekendReminder!=='boolean') fail(400,'INVALID_INPUT','주말 보충 알림 설정을 확인해 주세요.');
     res.json(settings(await db.user.update({where:{id:req.user.id},data:{weekendReminder:req.body.weekendReminder}})));
   });
+  router.post('/push-subscriptions/status',async(req,res)=>{
+    const endpoint=requiredText(req.body?.endpoint,'푸시 주소',2048);
+    const registered=await db.$transaction(async tx=>{
+      await requirePushSession(tx,req);
+      const subscription=await tx.pushSubscription.findFirst({where:{userId:req.user.id,endpoint},select:{id:true}});
+      if(!subscription) return false;
+      const deviceKeyHash=ensurePushDeviceHash(req,res);
+      await tx.pushSubscription.update({where:{id:subscription.id},data:{deviceKeyHash}});
+      await tx.session.update({where:{id:req.sessionId},data:{pushDeviceKeyHash:deviceKeyHash}});
+      return true;
+    });
+    res.json({registered});
+  });
   router.post('/push-subscriptions',async(req,res)=>{
     const endpoint=requiredText(req.body?.endpoint,'푸시 주소',2048);
     let url; try {url=new URL(endpoint);} catch {fail(400,'INVALID_PUSH','푸시 구독 주소가 올바르지 않습니다.');}
@@ -130,9 +144,14 @@ export function studentRouter(db) {
     if(url.protocol!=='https:'||url.username||url.password||url.port||!allowed) fail(400,'INVALID_PUSH','지원하는 브라우저의 HTTPS 푸시 구독을 사용해 주세요.');
     const p256dh=requiredText(req.body?.keys?.p256dh,'푸시 키',200); const auth=requiredText(req.body?.keys?.auth,'푸시 인증 키',100);
     if(!/^[A-Za-z0-9_-]+={0,2}$/.test(p256dh)||! /^[A-Za-z0-9_-]+={0,2}$/.test(auth)||Buffer.from(p256dh,'base64url').length!==65||Buffer.from(auth,'base64url').length!==16) fail(400,'INVALID_PUSH','푸시 구독 키가 올바르지 않습니다.');
-    const existing=await db.pushSubscription.findUnique({where:{endpoint}});
-    if(existing&&existing.userId!==req.user.id) fail(409,'PUSH_IN_USE','이 기기의 기존 알림 구독을 해제한 후 다시 등록해 주세요.');
-    await db.pushSubscription.upsert({where:{endpoint},create:{userId:req.user.id,endpoint,p256dh,auth},update:{p256dh,auth}});
+    await db.$transaction(async tx=>{
+      await requirePushSession(tx,req);
+      const existing=await tx.pushSubscription.findUnique({where:{endpoint}});
+      if(existing&&existing.userId!==req.user.id) fail(409,'PUSH_IN_USE','이 기기의 기존 알림 구독을 해제한 후 다시 등록해 주세요.');
+      const deviceKeyHash=ensurePushDeviceHash(req,res);
+      await tx.pushSubscription.upsert({where:{endpoint,userId:req.user.id},create:{userId:req.user.id,endpoint,p256dh,auth,deviceKeyHash},update:{p256dh,auth,deviceKeyHash}});
+      await tx.session.update({where:{id:req.sessionId},data:{pushDeviceKeyHash:deviceKeyHash}});
+    });
     res.status(201).json({ok:true});
   });
   router.delete('/push-subscriptions',async(req,res)=>{await db.pushSubscription.deleteMany({where:{userId:req.user.id,endpoint:requiredText(req.body?.endpoint,'푸시 주소',2048)}});res.json({ok:true});});

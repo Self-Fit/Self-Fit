@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { Prisma } from '@prisma/client';
-import { fail, requiredText } from './errors.js';
+import { fail, isForeignKeyViolation, requiredText } from './errors.js';
 import { userDto, studentSummary, recordDto, correctionDto, programDto, recordsWithAttachments } from './dto.js';
 import { hashPassword, temporaryPassword } from './password.js';
 import { studentFields, rosterRouter } from './roster.js';
@@ -83,9 +83,16 @@ export function teacherRouter(db) {
     res.json({user:userDto(await db.user.update({where:{id:req.params.id},data:fields}).catch(error=>duplicateNumber(error,fields.studentNumber)))});
   });
   router.delete('/students/:id',async(req,res)=>{
-    await getStudent(req.params.id);
-    if(await db.dailyRecord.count({where:{userId:req.params.id}})) fail(409,'HAS_RECORDS','운동 기록이 있는 학생은 삭제할 수 없습니다. 기록 보존을 위해 명단 정보를 수정해 주세요.');
-    await db.user.delete({where:{id:req.params.id}});res.json({ok:true});
+    const student=await getStudent(req.params.id,{select:{id:true,_count:{select:{records:true,sourceRows:true}}}});
+    if(student._count.records) fail(409,'HAS_RECORDS','운동 기록이 있는 학생은 삭제할 수 없습니다. 기록 보존을 위해 명단 정보를 수정해 주세요.');
+    if(student._count.sourceRows) fail(409,'HAS_SOURCE_DATA','가져온 원본 자료가 있는 학생은 삭제할 수 없습니다. 자료 보존을 위해 명단 정보를 수정해 주세요.');
+    try {await db.user.delete({where:{id:req.params.id}});}
+    catch(error) {
+      // Evidence may be inserted after the pre-check; the foreign key remains authoritative.
+      if(isForeignKeyViolation(error)) fail(409,'HAS_EVIDENCE','보존해야 할 자료가 있는 학생은 삭제할 수 없습니다. 명단 정보를 수정해 주세요.');
+      throw error;
+    }
+    res.json({ok:true});
   });
   router.post('/students/:id/reset-password',async(req,res)=>{
     await getStudent(req.params.id);const password=temporaryPassword();const passwordHash=await hashPassword(password);

@@ -4,6 +4,7 @@ import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import { fail, requiredText } from './errors.js';
 import { hashPassword, validatePassword, verifyPassword } from './password.js';
 import { userDto } from './dto.js';
+import { lockPushSession, pushDeviceHash } from './push-device.js';
 const COOKIE = 'self_fit_session';
 const sessionId = token => createHash('sha256').update(token).digest('hex');
 const cookieOptions = () => ({httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV === 'production',path:'/api',maxAge:8*60*60*1000});
@@ -12,7 +13,8 @@ export function authMiddleware(db) {
     const token = req.cookies?.[COOKIE];
     if (!token || typeof token !== 'string' || token.length > 200) return next();
     const session = await db.session.findUnique({where:{id:sessionId(token)},include:{user:true}});
-    if (session && session.expiresAt > new Date()) { req.user = session.user; req.sessionId = session.id; }
+    if (session) req.sessionId=session.id;
+    if (session && session.expiresAt > new Date()) req.user = session.user;
     next();
   };
 }
@@ -45,15 +47,26 @@ export function authRouter(db) {
     const loggedInUser=await db.$transaction(async tx => {
       const stillValid=await tx.user.updateMany({where:{id:user.id,passwordHash:user.passwordHash},data:{lastLoginAt:new Date()}});
       if(!stillValid.count) fail(401,'INVALID_CREDENTIALS','비밀번호가 변경되었습니다. 새 비밀번호로 다시 로그인해 주세요.');
-      if (req.sessionId) await tx.session.deleteMany({where:{id:req.sessionId}});
-      await tx.session.create({data:{id:sessionId(token),userId:user.id,expiresAt:expiry}});
+      const prior=await lockPushSession(tx,req.sessionId);
+      const deviceHashes=[pushDeviceHash(req),prior?.pushDeviceKeyHash].filter(Boolean);
+      if(deviceHashes.length) await tx.pushSubscription.deleteMany({where:{deviceKeyHash:{in:deviceHashes},userId:{not:user.id}}});
+      if(prior) await tx.session.deleteMany({where:{id:prior.id}});
+      await tx.session.create({data:{id:sessionId(token),userId:user.id,expiresAt:expiry,pushDeviceKeyHash:pushDeviceHash(req)||prior?.pushDeviceKeyHash||null}});
       return tx.user.findUnique({where:{id:user.id}});
     });
     res.cookie(COOKIE,token,cookieOptions()).json({user:userDto(loggedInUser)});
   });
   router.get('/me',requireUser,(req,res)=>res.json({user:userDto(req.user)}));
   router.post('/logout',async(req,res)=>{
-    if(req.sessionId) await db.session.deleteMany({where:{id:req.sessionId}});
+    const pushEndpoint=req.user&&req.body?.pushEndpoint!==undefined?requiredText(req.body.pushEndpoint,'푸시 주소',2048):null;
+    const deviceHash=pushDeviceHash(req);
+    if(req.sessionId||deviceHash) await db.$transaction(async tx=>{
+      const session=await lockPushSession(tx,req.sessionId);
+      const deviceHashes=[deviceHash,session?.pushDeviceKeyHash].filter(Boolean);
+      if(deviceHashes.length) await tx.pushSubscription.deleteMany({where:{deviceKeyHash:{in:deviceHashes},...(req.user?{userId:req.user.id}:{})}});
+      if(pushEndpoint) await tx.pushSubscription.deleteMany({where:{userId:req.user.id,endpoint:pushEndpoint}});
+      if(session) await tx.session.deleteMany({where:{id:session.id}});
+    });
     res.clearCookie(COOKIE,{...cookieOptions(),maxAge:undefined}).json({ok:true});
   });
   router.post('/change-password',requireUser,async(req,res)=>{

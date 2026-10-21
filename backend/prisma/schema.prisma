@@ -37,6 +37,7 @@ model Session {
   userId    String
   user      User @relation(fields:[userId], references:[id], onDelete:Cascade)
   expiresAt DateTime
+  pushDeviceKeyHash String? @db.VarChar(64)
   createdAt DateTime @default(now())
   @@index([userId])
   @@index([expiresAt])
@@ -152,8 +153,10 @@ model PushSubscription {
   endpoint  String @unique
   p256dh    String
   auth      String
+  deviceKeyHash String? @db.VarChar(64)
   createdAt DateTime @default(now())
   @@index([userId])
+  @@index([deviceKeyHash])
 }
 model RosterImport {
   id        String @id @default(uuid())

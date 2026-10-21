@@ -31,8 +31,8 @@ test('isolated PostgreSQL API integration', {skip:!process.env.TEST_DATABASE_URL
     temp=await mkdtemp(path.join(tmpdir(),'self-fit-test-'));
     await run(process.execPath,[require.resolve('prisma/build/index.js'),'migrate','deploy'],{cwd:backendDir,env:{...process.env,DATABASE_URL:baseUrl.toString()},timeout:60000});
     db=new PrismaClient({datasourceUrl:baseUrl.toString()});
-    let loginReadHook=null,transactionHook=null;
-    const userDelegate=new Proxy(db.user,{get(target,key){if(key==='findUnique')return args=>loginReadHook?loginReadHook(args):target.findUnique(args);return target[key];}});
+    let loginReadHook=null,transactionHook=null,deletionHook=null;
+    const userDelegate=new Proxy(db.user,{get(target,key){if(key==='findUnique')return args=>loginReadHook?loginReadHook(args):target.findUnique(args);if(key==='delete')return args=>deletionHook?deletionHook(args):target.delete(args);return target[key];}});
     const apiDb=new Proxy(db,{get(target,key){if(key==='user')return userDelegate;if(key==='$transaction')return(...args)=>transactionHook?transactionHook(...args):target.$transaction(...args);const value=target[key];return typeof value==='function'?value.bind(target):value;}});
     const app=await createApp(apiDb,{storageDir:temp});
     server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
@@ -51,6 +51,47 @@ test('isolated PostgreSQL API integration', {skip:!process.env.TEST_DATABASE_URL
     const teacherCookie=(await login(teacher.studentNumber,password)).cookie;
     const aCookie=(await login(a.studentNumber,password)).cookie;
     const bCookie=(await login(b.studentNumber,password)).cookie;
+    await t.test('student deletion preserves archived source evidence with a clear conflict',async()=>{
+      const student=await db.user.create({data:{role:'student',studentNumber:'test-source-only',name:'SOURCE ONLY',grade:1,classNumber:1,targetType:'optional',passwordHash,mustChangePassword:false}});
+      const dataset=await db.sourceDataset.create({data:{hash:randomUUID().replaceAll('-','').padEnd(64,'0'),filename:'synthetic-deletion-test.xlsx',metadataJson:{isSynthetic:true}}});
+      try {
+        await db.studentSource.create({data:{datasetId:dataset.id,userId:student.id,rosterJson:{isSynthetic:true}}});
+        assert.equal(await db.dailyRecord.count({where:{userId:student.id}}),0);
+        const result=await request(`/teacher/students/${student.id}`,{method:'DELETE',cookie:teacherCookie});
+        assert.equal(result.status,409);
+        assert.equal(result.data.error.code,'HAS_SOURCE_DATA');
+        assert(await db.user.findUnique({where:{id:student.id}}));
+        assert.equal(await db.studentSource.count({where:{userId:student.id}}),1);
+      } finally {
+        await db.studentSource.deleteMany({where:{userId:student.id}});
+        await db.sourceDataset.delete({where:{id:dataset.id}});
+        await db.user.delete({where:{id:student.id}});
+      }
+    });
+    await t.test('student deletion preserves evidence added after the pre-check and still deletes an empty account',async()=>{
+      const student=await db.user.create({data:{role:'student',studentNumber:'test-source-race',name:'SOURCE RACE',grade:1,classNumber:1,targetType:'optional',passwordHash,mustChangePassword:false}});
+      const dataset=await db.sourceDataset.create({data:{hash:randomUUID().replaceAll('-','').padEnd(64,'0'),filename:'synthetic-delete-race.xlsx',metadataJson:{isSynthetic:true}}});
+      try {
+        deletionHook=async args=>{
+          await db.studentSource.create({data:{datasetId:dataset.id,userId:student.id,rosterJson:{isSynthetic:true}}});
+          return db.user.delete(args);
+        };
+        const result=await request(`/teacher/students/${student.id}`,{method:'DELETE',cookie:teacherCookie});
+        assert.equal(result.status,409);
+        assert.equal(result.data.error.code,'HAS_EVIDENCE');
+        assert(await db.user.findUnique({where:{id:student.id}}));
+        assert.equal(await db.studentSource.count({where:{userId:student.id}}),1);
+        deletionHook=null;
+        await db.studentSource.deleteMany({where:{userId:student.id}});
+        assert.equal((await request(`/teacher/students/${student.id}`,{method:'DELETE',cookie:teacherCookie})).status,200);
+        assert.equal(await db.user.findUnique({where:{id:student.id}}),null);
+      } finally {
+        deletionHook=null;
+        await db.studentSource.deleteMany({where:{userId:student.id}});
+        await db.sourceDataset.delete({where:{id:dataset.id}});
+        await db.user.deleteMany({where:{id:student.id}});
+      }
+    });
     await t.test('participation analytics use 12 weeks, filter the participating cohort, and require teacher access',async()=>{
       assert.equal((await request('/teacher/participation')).status,401);
       assert.equal((await request('/teacher/participation',{cookie:aCookie})).status,403);

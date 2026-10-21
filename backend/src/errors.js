@@ -18,10 +18,13 @@ export function dateParam(value) {
   }
   return value;
 }
+// A row other data still points to. RESTRICT foreign keys raise 23001, which Prisma reports as an unknown error.
+export const isForeignKeyViolation = error => error?.code === 'P2003' || /code: "23(001|503)"/.test(String(error?.message));
 export function errorHandler(error, req, res, next) {
   if(req.aborted || res.destroyed) return;
   if (res.headersSent) return next(error);
   if (error.code === 'P2002') return res.status(409).json({error:{code:'CONFLICT',message:'이미 저장된 항목입니다. 화면을 새로고침해 주세요.'}});
+  if (isForeignKeyViolation(error)) return res.status(409).json({error:{code:'HAS_DEPENDENTS',message:'연결된 자료가 있어 처리할 수 없어요. 화면을 새로고침해 주세요.'}});
   if (error.code === 'P2025') return res.status(404).json({error:{code:'NOT_FOUND',message:'항목을 찾을 수 없습니다.'}});
   if (error.code === 'P2034' || (error.code === 'P2010' && ['40001','40P01'].includes(error.meta?.code))) return res.status(409).json({error:{code:'CONFLICT',message:'동시에 변경된 기록입니다. 새로고침 후 다시 시도해 주세요.'}});
   if (error.code === 'LIMIT_FILE_SIZE') return res.status(413).json({error:{code:'FILE_TOO_LARGE',message:'첨부 파일이 허용 크기를 넘었습니다.'}});

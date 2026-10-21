@@ -1,5 +1,6 @@
 import React,{useCallback,useState} from 'react';
 import {api,navigate,useSession,DesignTemplate} from './shared';
+import {logoutWithPush} from './push.js';
 
 function showError(root,error,before){let notice=root.querySelector('[data-auth-error]');if(!notice){notice=document.createElement('div');notice.className='banner red mt16';notice.dataset.authError='true';notice.setAttribute('role','alert');before.before(notice);}notice.textContent=error.message;}
 function cleanContact(root){root.querySelectorAll('.auth-foot').forEach(node=>{node.innerHTML='경북소프트웨어마이스터고 · 체육부';});}
@@ -33,7 +34,7 @@ export function PasswordChange({mode='web',first=false}){
     const valid=()=>password.value.length>=8&&password.value.length<=128&&/[A-Za-z]/.test(password.value)&&/[0-9]/.test(password.value)&&password.value!==user.studentNumber;
     const refresh=()=>{const checks=[password.value.length>=8,/[A-Za-z]/.test(password.value)&&/[0-9]/.test(password.value),password.value.length>0&&password.value!==user.studentNumber];help.forEach((element,index)=>{element.classList.toggle('ok',checks[index]);element.classList.remove('err');});button.disabled=busy||!valid()||password.value!==confirmation.value||(!first&&!current.value);button.classList.toggle('disabled',button.disabled);};inputs.forEach(input=>input.addEventListener('input',refresh));refresh();
     const run=async()=>{if(button.disabled)return;busy=true;refresh();root.querySelector('[data-auth-error]')?.remove();try{const {user:updated}=await api('/auth/change-password',{method:'POST',body:{newPassword:password.value,...(first?{}:{currentPassword:current.value})}});setUser(updated);navigate(`/${mode}${updated.role==='teacher'?'/admin':first?'':'/me'}`,true);}catch(error){showError(root,error,button.closest('.bottom-bar')||button);}finally{busy=false;refresh();}};button.onclick=run;inputs.forEach(input=>input.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();run();}});
-    const back=root.querySelector('[aria-label="뒤로"]');if(back)back.onclick=async()=>{if(first){await api('/auth/logout',{method:'POST',body:{}});setUser(null);navigate(`/${mode}/login`,true);}else navigate(`/${mode}${user.role==='teacher'?'/admin/more':'/me'}`);};
+    const back=root.querySelector('[aria-label="뒤로"]');if(back)back.onclick=async()=>{if(first){try{await logoutWithPush(api);setUser(null);navigate(`/${mode}/login`,true);}catch(error){showError(root,error,button.closest('.bottom-bar')||button);}}else navigate(`/${mode}${user.role==='teacher'?'/admin/more':'/me'}`);};
   },[mode,first,user.studentNumber,user.role,setUser]);
   return <DesignTemplate {...{id,setup}}/>;
 }

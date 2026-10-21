@@ -1,26 +1,11 @@
-import React, { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import templates from './design-templates.json';
 import icons from './design-icons.json';
 export { templates };
 
-export class ApiError extends Error {
-  constructor(message, status, code, details) { super(message); Object.assign(this, { status, code, details }); }
-}
-export async function api(path, options = {}) {
-  const init = { credentials: 'include', ...options, headers: { ...options.headers } };
-  if (init.body !== undefined && !(init.body instanceof FormData) && typeof init.body !== 'string') {
-    init.headers['Content-Type'] = 'application/json'; init.body = JSON.stringify(init.body);
-  }
-  const response = await fetch(path.startsWith('/api') ? path : `/api${path}`, init);
-  const isJson = response.headers.get('content-type')?.includes('application/json');
-  const result = isJson ? await response.json() : await response.text();
-  if (!response.ok) {
-    if(response.status===401&&!path.replace(/^\/api/,'').startsWith('/auth/'))window.dispatchEvent(new Event('self-fit-session-expired'));
-    throw new ApiError(result?.error?.message || '요청을 처리하지 못했어요.', response.status, result?.error?.code, result?.error?.details);
-  }
-  return result;
-}
+import { api, advanceSessionVersion, getSessionVersion } from './api.js';
+export { api, ApiError } from './api.js';
 export function navigate(path, replace = false) {
   window.history[replace ? 'replaceState' : 'pushState']({}, '', path);
   window.dispatchEvent(new PopStateEvent('popstate'));
@@ -37,8 +22,19 @@ export function useLocation() {
 }
 const SessionContext = createContext(null);
 export function SessionProvider({ children }) {
-  const [user, setUser] = useState(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(null);
-  async function refresh() { try { const data = await api('/auth/me'); setUser(data.user); setError(null); } catch (error) { setUser(null); if (error.status !== 401) setError(error); } finally { setLoading(false); } }
+  const [user, setUserState] = useState(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(null);
+  const setUser = useCallback(next => { advanceSessionVersion(); setUserState(next); }, []);
+  async function refresh() {
+    const version = getSessionVersion();
+    try {
+      const data = await api('/auth/me');
+      if (version !== getSessionVersion()) return;
+      setUser(data.user); setError(null);
+    } catch (error) {
+      if (version !== getSessionVersion()) return;
+      setUser(null); if (error.status !== 401) setError(error);
+    } finally { setLoading(false); }
+  }
   useEffect(() => { refresh(); }, []);
   useEffect(() => { const expire=()=>setUser(null); window.addEventListener('self-fit-session-expired',expire); return()=>window.removeEventListener('self-fit-session-expired',expire); }, []);
   return <SessionContext.Provider value={{ user, setUser, loading, error, refresh }}>{children}</SessionContext.Provider>;
