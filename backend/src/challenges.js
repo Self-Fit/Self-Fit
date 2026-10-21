@@ -238,6 +238,23 @@ export async function remove(db, id) {
   });
 }
 
+// "Current challenge" (README §5). Teachers see the challenge in progress first (active, then a rest gap),
+// students keep their order (active, upcoming, rest). Ties: upcoming → earliest start, ended → latest end,
+// otherwise latest start.
+const TEACHER_PRIORITY = { active: 0, rest: 1, upcoming: 2, ended: 3 };
+const STUDENT_PRIORITY = { active: 0, upcoming: 1, rest: 2, ended: 3 };
+function pickCurrent(candidates, priority, today = koreanDate()) {
+  const ranked = candidates.map(challenge => ({ challenge, phase: challengePhase(challenge, today) }));
+  ranked.sort((left, right) => {
+    if (priority[left.phase] !== priority[right.phase]) return priority[left.phase] - priority[right.phase];
+    const a = left.challenge, b = right.challenge;
+    const dateOrder = left.phase === 'upcoming' ? a.startDate.localeCompare(b.startDate)
+      : left.phase === 'ended' ? b.endDate.localeCompare(a.endDate) : b.startDate.localeCompare(a.startDate);
+    return dateOrder || a.id.localeCompare(b.id);
+  });
+  return ranked[0]?.challenge ?? null;
+}
+
 export async function resolveCurrentChallenge(db, user, explicitId) {
   if (explicitId !== undefined && explicitId !== null && explicitId !== '') {
     const challenge = await loadChallenge(db, explicitId);
@@ -247,24 +264,12 @@ export async function resolveCurrentChallenge(db, user, explicitId) {
     }
     return challenge;
   }
-  if (user.role === 'teacher') {
-    const challenge = await db.challenge.findFirst({ where: { lifecycle: 'published' }, orderBy: [{ startDate: 'desc' }, { id: 'asc' }], include: includeWeeks });
-    if (!challenge) return null;
-    return { ...challenge, counts: (await challengeCounts(db, [challenge.id])).get(challenge.id) };
-  }
+  const teacher = user.role === 'teacher';
   const candidates = await db.challenge.findMany({
-    where: { lifecycle: 'published', memberships: { some: { userId: user.id, status: 'active' } } },
+    where: { lifecycle: 'published', ...(teacher ? {} : { memberships: { some: { userId: user.id, status: 'active' } } }) },
     include: includeWeeks,
   });
-  const today = koreanDate(), priority = { active: 0, upcoming: 1, rest: 2, ended: 3 };
-  candidates.sort((left, right) => {
-    const leftPhase = challengePhase(left, today), rightPhase = challengePhase(right, today);
-    if (priority[leftPhase] !== priority[rightPhase]) return priority[leftPhase] - priority[rightPhase];
-    const dateOrder = leftPhase === 'upcoming' ? left.startDate.localeCompare(right.startDate)
-      : leftPhase === 'ended' ? right.endDate.localeCompare(left.endDate) : right.startDate.localeCompare(left.startDate);
-    return dateOrder || left.id.localeCompare(right.id);
-  });
-  const challenge = candidates[0];
+  const challenge = pickCurrent(candidates, teacher ? TEACHER_PRIORITY : STUDENT_PRIORITY);
   if (!challenge) return null;
   return { ...challenge, counts: (await challengeCounts(db, [challenge.id])).get(challenge.id) };
 }
@@ -280,7 +285,8 @@ export function challengeRouter(db) {
       orderBy: [{ startDate: 'desc' }, { id: 'asc' }],
     });
     const counts = await challengeCounts(db, challenges.map(row => row.id)), today = koreanDate();
-    res.json({ challenges: challenges.map(row => challengeDto({ ...row, counts: counts.get(row.id) }, today, { detail: false })) });
+    const current = await resolveCurrentChallenge(db, req.user);
+    res.json({ challenges: challenges.map(row => challengeDto({ ...row, counts: counts.get(row.id) }, today, { detail: false })), currentId: current?.id ?? null });
   });
   router.post('/', async (req, res) => res.status(201).json({ challenge: challengeDto(await createChallenge(db, req.body, req.user.id)) }));
   router.get('/:id', async (req, res) => res.json({ challenge: challengeDto(await loadChallenge(db, req.params.id)) }));

@@ -157,7 +157,8 @@ export async function runChallengeApiCases(t, { db, request, teacherCookie, a, b
           { challengeId: challenge.id, userId: b.id, mode: 'invited', status: 'declined' },
         ] });
         assert.deepEqual((await teacher(`/teacher/challenges/${challenge.id}`)).data.challenge.counts, { active: 1, pending: 0, declined: 1, forced: 1, invited: 1 });
-        assert.equal((await request('/program', { cookie: teacherCookie })).data.challengeId, challenge.id);
+        assert.equal((await request('/program', { cookie: teacherCookie })).data.challengeId, legacyId, 'the teacher\'s current challenge is the one in progress, not the latest to start');
+        assert.equal((await teacher('/teacher/challenges')).data.currentId, legacyId);
         assert.equal((await request('/program', { cookie: aCookie })).data.challengeId, legacyId, 'an active legacy challenge outranks an upcoming challenge');
 
         t.mock.timers.setTime(new Date('2026-06-08T01:00:00Z').getTime());
@@ -271,8 +272,8 @@ export async function runChallengeApiCases(t, { db, request, teacherCookie, a, b
         assert.equal(archived.status, 200);
         upload.end('\r\n--archive-race--\r\n');
         const response = await responsePromise;
-        assert.ok([403, 404].includes(response.status), JSON.stringify(response));
-        assert.ok(['CHALLENGE_NOT_FOUND', 'NOT_MEMBER'].includes(response.data.error.code));
+        assert.equal(response.status, 409, JSON.stringify(response));
+        assert.equal(response.data.error.code, 'CHALLENGE_ARCHIVED');
         assert.equal(await db.attachment.count({ where: { recordId } }), 0);
         assert.equal((await db.dailyRecord.findUnique({ where: { id: recordId } })).value, 10);
         for (let attempt = 0; attempt < 100; attempt += 1) {

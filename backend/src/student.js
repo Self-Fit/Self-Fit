@@ -33,7 +33,7 @@ export function studentRecordRouter(db,{legacy=false}={}) {
   router.use(async(req,res,next)=>{
     if(!/^\/(dashboard|records)(\/|$)/.test(req.path)) return next();
     if(legacy) res.set('Deprecation','true');
-    const context=await studentContext(db,req.user,req.params.challengeId,{allowEmpty:legacy && req.method==='GET'});
+    const context=await studentContext(db,req.user,req.params.challengeId,{allowEmpty:legacy && req.method==='GET',readOnly:req.method==='GET'});
     req.challenge=context.challenge;req.membership=context.membership;next();
   });
   router.get('/dashboard',async(req,res)=>{

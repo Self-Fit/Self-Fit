@@ -296,8 +296,18 @@ export async function runMembershipApiCases(t, { db, request, a, temp }) {
       const archived = await teacher(`/teacher/challenges/${challenge.id}/archive`, { method: 'POST', body: {} });
       assert.equal(archived.status, 200);
       error(await add(challenge, [outsider], 'forced'), 409, 'CHALLENGE_NOT_PUBLISHED');
-      error(await request(`/student/challenges/${challenge.id}`, { cookie: owner.cookie }), 404, 'CHALLENGE_NOT_FOUND');
-      assert.equal((await request('/student/challenges', { cookie: owner.cookie })).data.current, null);
+      assert.equal((await request(`/student/challenges/${challenge.id}`, { cookie: owner.cookie })).status, 200, 'members keep reading an archived challenge');
+      error(await request(`/student/challenges/${challenge.id}`, { cookie: outsider.cookie }), 404, 'CHALLENGE_NOT_FOUND');
+      const afterArchive = (await request('/student/challenges', { cookie: owner.cookie })).data;
+      assert.equal(afterArchive.current, null);
+      assert.deepEqual(afterArchive.challenges, []);
+      assert.deepEqual(afterArchive.archived.map(item => item.challenge.id), [challenge.id]);
+      assert.deepEqual(keys(afterArchive.archived[0]), keys(studentFixture.challenges[0]));
+      for (const suffix of ['/dashboard', '/records', '/records/2027-03-02']) assert.equal((await request(`/student/challenges/${challenge.id}${suffix}`, { cookie: owner.cookie })).status, 200, suffix);
+      error(await request(`/student/challenges/${challenge.id}/dashboard`, { cookie: outsider.cookie }), 404, 'CHALLENGE_NOT_FOUND');
+      error(await request(`/student/challenges/${challenge.id}/records/2027-03-02`, { cookie: owner.cookie, method: 'PUT', body: { value: 100 } }), 409, 'CHALLENGE_ARCHIVED');
+      error(await request(`/student/challenges/${challenge.id}/records/2027-03-02/corrections`, { cookie: owner.cookie, method: 'POST', body: { value: 100, version: 1, reason: '보관 검증' } }), 409, 'CHALLENGE_ARCHIVED');
+      error(await request(`/student/challenges/${challenge.id}/records/2027-03-02/attachments`, { cookie: owner.cookie, method: 'POST' }), 409, 'CHALLENGE_ARCHIVED');
     });
 
     await t.test('overlapping challenges isolate daily records, corrections, attachments and legacy current selection', async () => {

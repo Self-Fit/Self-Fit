@@ -72,14 +72,13 @@ test('current student challenge prioritizes active, upcoming, rest, then latest 
   assert.equal(await resolve(), null);
 });
 
-test('current teacher challenge uses published latest start date and supports an explicit draft', async () => {
+test('current teacher challenge considers every published challenge and supports an explicit draft', async () => {
   const draft = { ...structuredClone(fixture), lifecycle: 'draft' };
   const db = {
     challenge: {
-      findFirst: async query => {
+      findMany: async query => {
         assert.deepEqual(query.where, { lifecycle: 'published' });
-        assert.deepEqual(query.orderBy, [{ startDate: 'desc' }, { id: 'asc' }]);
-        return null;
+        return [];
       },
       findUnique: async query => query.where.id === draft.id ? draft : null,
     },
@@ -88,6 +87,25 @@ test('current teacher challenge uses published latest start date and supports an
   assert.equal(await resolveCurrentChallenge(db, { role: 'teacher' }), null);
   assert.equal((await resolveCurrentChallenge(db, { role: 'teacher' }, draft.id)).id, draft.id);
   await assert.rejects(resolveCurrentChallenge(db, { role: 'teacher' }, 'missing'), { status: 404, code: 'CHALLENGE_NOT_FOUND' });
+});
+
+test('teacher current challenge prefers one in progress, then the next to start, then the latest ended', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2027-03-10T03:00:00Z') });
+  try {
+    const make = (id, startDate, endDate, weeks) => ({ id, lifecycle: 'published', startDate, endDate,
+      weeks: weeks.map(([start, end], index) => ({ week: index + 1, startDate: start, endDate: end })) });
+    const active = make('active', '2027-03-01', '2027-03-31', [['2027-03-08', '2027-03-14']]);
+    const rest = make('rest', '2027-02-01', '2027-04-30', [['2027-02-01', '2027-02-07'], ['2027-04-01', '2027-04-07']]);
+    const soon = make('soon', '2027-04-01', '2027-04-07', [['2027-04-01', '2027-04-07']]);
+    const later = make('later', '2027-09-01', '2027-09-07', [['2027-09-01', '2027-09-07']]);
+    const ended = make('ended', '2026-05-04', '2026-09-04', [['2026-05-04', '2026-05-10']]);
+    const older = make('older', '2025-05-04', '2025-09-04', [['2025-05-04', '2025-05-10']]);
+    const pick = async rows => (await resolveCurrentChallenge({ challenge: { findMany: async () => rows }, challengeMembership: noMembers }, { role: 'teacher' }))?.id;
+    assert.equal(await pick([later, soon, ended, rest, active]), 'active', 'a running week beats a later start date');
+    assert.equal(await pick([later, soon, ended, rest]), 'rest', 'a challenge between weeks is still in progress');
+    assert.equal(await pick([later, soon, ended]), 'soon', 'then the next challenge to start');
+    assert.equal(await pick([older, ended]), 'ended', 'then the most recently ended');
+  } finally { t.mock.timers.reset(); }
 });
 
 test('an explicit student challenge never bypasses published active membership access', async () => {

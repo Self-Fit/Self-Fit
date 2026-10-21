@@ -52,7 +52,7 @@ MembershipSelf = { mode, status, invitedAt, respondedAt }
 
 | 메서드·경로 | 요청 | 응답 | 오류 |
 | --- | --- | --- | --- |
-| `GET /teacher/challenges?lifecycle=all\|draft\|published\|archived` | 기본 `all` | `{challenges:[ChallengeSummary]}` startDate 내림차순 | |
+| `GET /teacher/challenges?lifecycle=all\|draft\|published\|archived` | 기본 `all` | `{challenges:[ChallengeSummary], currentId: null\|id}` startDate 내림차순. `currentId`는 교사 "현재 챌린지"(README §5, 진행 중 우선) | |
 | `POST /teacher/challenges` | `{title, description?, startDate, endDate?, enrollmentDeadline?, weeks:[WeekInput]}` `endDate` 생략 시 마지막 주차 endDate | `201 {challenge}` lifecycle=draft | `400 INVALID_CHALLENGE` |
 | `POST /teacher/challenges/:id/duplicate` | `{title?, startDate}` 제목 기본 `"<원본 제목> (복사)"` | `201 {challenge}` draft, 주차 날짜는 평행 이동 | `404 CHALLENGE_NOT_FOUND` |
 | `GET /teacher/challenges/:id` | | `{challenge}` | `404` |
@@ -77,16 +77,16 @@ MembershipSelf = { mode, status, invitedAt, respondedAt }
 ### 기존 교사 API에 추가되는 `challengeId`
 `GET /teacher/overview`, `/teacher/participation`, `/teacher/export`, `/teacher/corrections`, `/teacher/students/:id`에 `challengeId` 쿼리를 추가한다.
 생략하면 "현재 챌린지"(README §5). 응답에 `challenge: ChallengeSummary`를 포함한다. 분모·`participating` 표기는 그 챌린지의 `active` 참여자다.
-`/teacher/students`(명단)는 계정 단위다. `challengeId`를 주면 `participating`(및 `participating` 필터)이 그 챌린지의 `active` 참여 여부가 된다(phase 3). `User.participating` 계정 값은 phase 3부터 더 이상 갱신하지 않는다(학생 생성·명단 등록은 어떤 챌린지에도 참여시키지 않음).
+`/teacher/students`(명단)는 계정 단위다. `participating`(및 `participating` 필터)은 `challengeId`로 준 챌린지, 없으면 교사의 현재 챌린지의 `active` 참여 여부다. `User.participating` 컬럼은 제거됐고, 챌린지 문맥이 없는 계정 응답(`/auth/me` 등)의 `participating`은 `null`이다. 학생 생성·명단 등록은 어떤 챌린지에도 참여시키지 않는다.
 
 ## 학생 API (`role = student`)
 
 | 메서드·경로 | 요청 | 응답 | 오류 |
 | --- | --- | --- | --- |
-| `GET /student/challenges` | | `{current: null\|{challenge:ChallengeSummary, membership:MembershipSelf}, challenges:[{challenge, membership}], invitations:[{challenge, membership}], closedInvitations:[{challenge, membership}]}` `challenges`는 active 참여, `invitations`는 `pending`이고 마감 전인 것만, `closedInvitations`는 마감은 지났지만 아직 종료 전(오늘 ≤ endDate)인 `pending` 초대 | |
+| `GET /student/challenges` | | `{current: null\|{challenge:ChallengeSummary, membership:MembershipSelf}, challenges:[{challenge, membership}], invitations:[{challenge, membership}], closedInvitations:[{challenge, membership}], archived:[{challenge, membership}]}` `challenges`는 게시 챌린지의 active 참여, `invitations`는 `pending`이고 마감 전인 것만, `closedInvitations`는 마감은 지났지만 아직 종료 전(오늘 ≤ endDate)인 `pending` 초대, `archived`는 active 참여였던 보관 챌린지 | |
 | `POST /student/challenges/:id/accept` | `{}` | `{membership:MembershipSelf}` status=active | `404 NO_INVITATION`, `409 INVITATION_CLOSED` |
 | `POST /student/challenges/:id/decline` | `{}` | `{membership}` status=declined | `404 NO_INVITATION` |
-| `GET /student/challenges/:id` | | `{challenge}` (published만) | `404` |
+| `GET /student/challenges/:id` | | `{challenge}` (published, 또는 active 참여였던 archived) | `404` |
 | `GET /student/challenges/:id/dashboard` | | `{user, challenge, membership, summary, records, unreadCount}` 기존 `/student/dashboard`에서 `program` → `challenge` | `403 NOT_MEMBER`(active 아님) |
 | `GET /student/challenges/:id/records` | | `{records, summary}` | `403 NOT_MEMBER` |
 | `GET /student/challenges/:id/records/:date` | | 기존 `/student/records/:date`와 동일 | |
@@ -109,7 +109,7 @@ MembershipSelf = { mode, status, invitedAt, respondedAt }
 | `CHALLENGE_NOT_FOUND` | 404 | 없는 챌린지, 또는 학생이 draft를 조회 |
 | `INVALID_CHALLENGE` | 400 | 검증 실패. `details:[{path:'weeks[2].endDate', message}]` |
 | `CHALLENGE_LOCKED` | 409 | 시작 후 주차/날짜 수정 |
-| `CHALLENGE_NOT_DRAFT` / `ALREADY_PUBLISHED` / `CHALLENGE_NOT_PUBLISHED` / `CHALLENGE_ARCHIVED` | 409 | 상태 전이 위반 |
+| `CHALLENGE_NOT_DRAFT` / `ALREADY_PUBLISHED` / `CHALLENGE_NOT_PUBLISHED` / `CHALLENGE_ARCHIVED` | 409 | 상태 전이 위반. 학생이 보관 챌린지의 기록·정정·첨부를 바꾸려 할 때도 `CHALLENGE_ARCHIVED`(읽기는 허용) |
 | `INVALID_SELECTION` | 400 | `studentIds`도 `filters`도 없거나 둘 다 있음, 100,000자 초과 |
 | `ENROLLMENT_CLOSED` | 409 | 초대 마감/종료 후 등록 시도 |
 | `INVITATION_CLOSED` | 409 | 학생이 마감 후 수락 |

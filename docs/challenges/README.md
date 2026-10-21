@@ -91,8 +91,7 @@ model ChallengeMembership {
 
 DB 제약(마이그레이션 SQL에 CHECK로 넣는다): `lifecycle`, `inputType`, `mode`, `status` 값 집합, `startDate <= endDate`, 주차는 챌린지 기간 안.
 
-`User.participating`/`User.targetType`은 **당분간 유지**한다. `targetType`은 명단의 기본 구분(필수/선택)으로 인원 선택 필터에 쓰고,
-`participating`은 phase 3에서 "현재 챌린지 active 참여 여부"로 재해석하거나 제거한다(phase 3 결정 항목).
+`User.targetType`은 명단의 기본 구분(필수/선택)으로 인원 선택 필터에 쓴다. `User.participating` 컬럼은 phase 3 이후 제거했다(마이그레이션 `20261021090000_drop_user_participating`). 참여는 챌린지 membership으로만 판단한다.
 
 ## 4. 상태 규칙
 
@@ -125,7 +124,8 @@ DB 제약(마이그레이션 SQL에 CHECK로 넣는다): `lifecycle`, `inputType
 ## 5. "현재 챌린지" 해석(레거시 호환)
 phase 3 전까지 기존 경로는 그대로 동작해야 한다. 서버가 요청마다 아래로 해석한다.
 - 학생: 내 `active` 참여 중 phase가 `active` → `upcoming` → `rest` 순으로 우선, 없으면 가장 최근 `ended`. 없으면 `null`(기존 "미참여" 화면).
-- 교사: `published` 중 startDate가 가장 늦은 것. `challengeId` 쿼리로 명시하면 그것.
+- 교사: `published` 중 **진행 중인 것 우선** — phase `active` → `rest`(주차 사이) → `upcoming`(가장 먼저 시작) → `ended`(가장 최근 종료). 같은 phase면 시작일이 늦은 것. `challengeId` 쿼리로 명시하면 그것. `GET /teacher/challenges`가 `currentId`로 알려준다.
+- 보관(`archived`)된 챌린지는 "현재 챌린지"가 되지 않는다. 학생은 active 참여였던 보관 챌린지를 목록의 `archived`로 따로 보고 기록을 읽을 수만 있다.
 - `/program`은 교사·학생 공통으로 "현재 챌린지"를 돌려주되 응답 모양은 기존과 같다(`weeks`, `activityDates`, `status`…) + `challengeId`.
 
 ## 6. 기존 코드에서 바뀐 접점 (phase 3 완료 기준 최종 상태)
@@ -136,7 +136,7 @@ phase 3 전까지 기존 경로는 그대로 동작해야 한다. 서버가 요�
 | `backend/src/dto.js` `programDto` | 인자 없음 | `programDto(challenge)` (레거시 `/program`·`/student/dashboard`용) |
 | `backend/src/student.js`, `student-challenges.js` | `/student/*`가 사용자 기록 전체 | `/student/challenges/:id/*`가 기준. 레거시 경로는 현재 챌린지로 해석하고 `Deprecation: true`를 붙임(다음 릴리스에서 제거) |
 | `backend/src/teacher.js`, `participation.js`, `export.js` | 전교생·전체 기록 | `challengeId`로 범위 제한, 분모는 `active` 참여자. `/teacher/students?challengeId=`는 그 챌린지 기준 참여 여부 |
-| `User.participating` | 참여 여부 | 읽기 전용 레거시 값. 학생 생성·명단 등록·수정에서 더 이상 쓰지 않음(제거는 별도 마이그레이션 결정) |
+| `User.participating` | 참여 여부 | 컬럼 제거. 응답의 `participating`은 챌린지 기준 계산 값이고, 계정 단위 응답에서는 `null` |
 | `backend/src/notifications.js` | `reminder:<user>:<date>` | `reminder:<challengeId>:<user>:<date>`만 생성, 챌린지별 주차로 판정 |
 | `backend/scripts/import-*.js` | DailyRecord에 challengeId 없음 | 레거시 챌린지 id로 적재 |
 | `frontend/src/student.jsx` 등 | `/student/dashboard` 하나 | `GET /student/challenges`로 고른 챌린지의 `/student/challenges/:id/dashboard`·`records` 사용. 전환 메뉴(내 챌린지·마이) 선택이 화면에 반영 |
