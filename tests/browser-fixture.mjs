@@ -31,11 +31,11 @@ try {
   const legacy='challenge-2026-self-fit';
   const passwordHash=await hashPassword('QaOnly1234!');
   const teacher=await db.user.create({data:{role:'teacher',studentNumber:'qa-teacher',name:'검증 교사',passwordHash,mustChangePassword:false}});
-  const student=await db.user.create({data:{role:'student',studentNumber:'qa-student',name:'검증 학생',grade:2,classNumber:3,targetType:'required',participating:true,passwordHash,mustChangePassword:false}});
-  const second=await db.user.create({data:{role:'student',studentNumber:'qa-zero',name:'기록 구분 검증',grade:1,classNumber:1,targetType:'required',participating:true,passwordHash,mustChangePassword:false}});
+  const student=await db.user.create({data:{role:'student',studentNumber:'qa-student',name:'검증 학생',grade:2,classNumber:3,targetType:'required',passwordHash,mustChangePassword:false}});
+  const second=await db.user.create({data:{role:'student',studentNumber:'qa-zero',name:'기록 구분 검증',grade:1,classNumber:1,targetType:'required',passwordHash,mustChangePassword:false}});
   for(const user of [student,second])await db.challengeMembership.create({data:{challengeId:legacy,userId:user.id,mode:'forced',status:'active'}});
   // A student with no current challenge (dashboard program:null).
-  const optional=await db.user.create({data:{role:'student',studentNumber:'qa-optional',name:'미참여 검증',grade:1,classNumber:2,targetType:'optional',participating:false,passwordHash,mustChangePassword:false}});
+  const optional=await db.user.create({data:{role:'student',studentNumber:'qa-optional',name:'미참여 검증',grade:1,classNumber:2,targetType:'optional',passwordHash,mustChangePassword:false}});
   for(const week of LEGACY_WEEKS.filter(w=>!w.deferred))for(const date of activityDates(LEGACY_WEEKS,week).slice(0,5))await db.dailyRecord.create({data:{challengeId:legacy,userId:student.id,date,value:week.inputType==='walking'?5:week.inputType==='check'?true:week.inputType==='dumbbell'?Object.fromEntries(week.exercises.map(exercise=>[exercise.id,exercise.targetSets])):week.weeklyTarget/5}});
   await db.dailyRecord.create({data:{challengeId:legacy,userId:second.id,date:'2026-06-08',value:0}});
   await db.dailyRecord.create({data:{challengeId:legacy,userId:second.id,date:'2026-05-04',value:0}});

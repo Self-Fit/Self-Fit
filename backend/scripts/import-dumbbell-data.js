@@ -55,20 +55,22 @@ export async function importDumbbellData(db, source, { apply = false } = {}) {
     const challengeId = await legacyChallengeId(tx);
     const users = await tx.user.findMany({
       where: { studentNumber: { in: prepared.students.map(student => student.studentNumber) } },
-      select: { id: true, studentNumber: true, role: true, name: true, grade: true, classNumber: true, targetType: true, participating: true },
+      select: { id: true, studentNumber: true, role: true, name: true, grade: true, classNumber: true, targetType: true },
     });
+    // Every student in this workbook took part in the legacy challenge.
+    const participants = users.map(user => ({ ...user, participating: true }));
     assert.equal(users.length, prepared.students.length, 'A student account is missing; this importer never creates accounts');
     const byNumber = new Map(users.map(user => [user.studentNumber, user]));
     for (const student of prepared.students) {
       const user = byNumber.get(student.studentNumber);
-      assert(user?.role === 'student' && user.name === student.name && user.grade === student.grade && user.classNumber === student.classNumber && user.participating === true,
+      assert(user?.role === 'student' && user.name === student.name && user.grade === student.grade && user.classNumber === student.classNumber,
         'Existing student identity or participation differs from the workbook');
     }
-    await ensureLegacyMemberships(tx, users, { apply: false });
+    await ensureLegacyMemberships(tx, participants, { apply: false });
     const userIds = new Map(users.map(user => [user.studentNumber, user.id]));
     const existing = await tx.sourceDataset.findUnique({ where: { hash: source.sha256 }, select: { id: true } });
     if (existing) {
-      await ensureLegacyMemberships(tx, users, { apply: false, requireExisting: true });
+      await ensureLegacyMemberships(tx, participants, { apply: false, requireExisting: true });
       const verification = await verifySaved(tx, existing.id, source, prepared, userIds, challengeId);
       return { mode: apply ? 'apply' : 'dry-run', alreadyImported: true, changed: false, datasetId: existing.id, ...prepared.summary, ...verification };
     }
@@ -80,7 +82,7 @@ export async function importDumbbellData(db, source, { apply = false } = {}) {
       accountsCreated: 0, passwordsChanged: 0, earlierWeekRecordsChanged: 0, previousFitnessDataChanged: 0,
     };
     if (!apply) return { ...plan, changed: false, readyToApply: true };
-    await ensureLegacyMemberships(tx, users);
+    await ensureLegacyMemberships(tx, participants);
     const datasetId = randomUUID(), importedAt = new Date(), metadata = sourceMetadata(source, prepared);
     // JSON text binding preserves decimals in the original cached formulas.
     await tx.$executeRaw`INSERT INTO "SourceDataset" ("id", "hash", "filename", "metadataJson", "importedAt")

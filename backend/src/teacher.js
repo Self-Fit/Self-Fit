@@ -7,7 +7,7 @@ import { studentFields, rosterRouter } from './roster.js';
 import { summarizeProgram, summarizeWeek,getWeekForDate } from './domain/index.js';
 import { checkValue,checkProspectiveTotals } from './student.js';
 import { exportStudents,exportCorrections } from './export.js';
-import { challengeRouter, challengeDto, loadChallenge } from './challenges.js';
+import { challengeRouter, challengeDto, loadChallenge, resolveCurrentChallenge } from './challenges.js';
 import { teacherChallenge } from './challenge-context.js';
 import { parseFilters } from './filters.js';
 import { buildParticipation } from './participation.js';
@@ -17,7 +17,6 @@ export { parseFilters } from './filters.js';
 export async function filteredStudents(db,query,challenge=null,{records=true}={}) {
   const filters=parseFilters(query),where={role:'student'};
   for(const key of ['grade','classNumber','targetType']) if(filters[key]!==undefined) where[key]=filters[key];
-  if(!challenge && filters.participating!==undefined) where.participating=filters.participating;
   if(filters.search) where.OR=[{name:{contains:filters.search,mode:'insensitive'}},{studentNumber:{contains:filters.search,mode:'insensitive'}}];
   if(filters.studentIds) where.id={in:filters.studentIds};
   if(challenge && filters.week && !challenge.weeks.some(week=>week.week===filters.week)) fail(400,'INVALID_FILTER','해당 챌린지의 주차를 선택해 주세요.');
@@ -25,8 +24,9 @@ export async function filteredStudents(db,query,challenge=null,{records=true}={}
     memberships:{where:{challengeId:challenge.id}},
     ...(records?{records:{where:{challengeId:challenge.id},...recordsWithAttachments,include:{attachments:true,corrections:{orderBy:{createdAt:'desc'}}}}}:{}),
   }:undefined,orderBy:[{grade:'asc'},{classNumber:'asc'},{studentNumber:'asc'}]});
-  if(challenge) students=students.map(user=>({...user,participating:user.memberships.some(member=>member.status==='active')}));
-  if(challenge && filters.participating!==undefined) students=students.filter(user=>user.participating===filters.participating);
+  // Participation is an active membership in the given challenge; without a challenge nobody participates.
+  students=students.map(user=>({...user,participating:!!challenge&&user.memberships.some(member=>member.status==='active')}));
+  if(filters.participating!==undefined) students=students.filter(user=>user.participating===filters.participating);
   if(filters.achievement && challenge && records) students=students.filter(student=>student.participating&&(filters.week?summarizeWeek(challenge.weeks.find(week=>week.week===filters.week),student.records):summarizeProgram(challenge.weeks,student.records)).status===filters.achievement);
   return {students,filters};
 }
@@ -47,7 +47,7 @@ export function teacherRouter(db) {
     const [students,registeredClasses]=await Promise.all([
       db.user.findMany({
         where:{role:'student',memberships:{some:{challengeId:challenge.id,status:'active'}},...filters},
-        select:{grade:true,classNumber:true,targetType:true,participating:true,records:{where:{challengeId:challenge.id},select:{date:true,value:true}}},
+        select:{grade:true,classNumber:true,targetType:true,records:{where:{challengeId:challenge.id},select:{date:true,value:true}}},
       }),
       db.user.findMany({
         where:{role:'student'},select:{grade:true,classNumber:true},
@@ -62,8 +62,8 @@ export function teacherRouter(db) {
     };
     res.json({...buildParticipation(challenge.weeks,students.map(user=>({...user,participating:true}))),challenge:challengeDto(challenge,undefined,{detail:false}),filters,filterOptions});
   });
-  // The roster is account-level; with ?challengeId= its participating flag (and filter) follow that challenge's active members.
-  router.get('/students',async(req,res)=>{const challenge=req.query.challengeId?await teacherChallenge(db,req):null;res.json({students:(await filteredStudents(db,req.query,challenge,{records:false})).students.map(userDto)});});
+  // The roster is account-level; its participating flag (and filter) follow the given challenge, else the current one.
+  router.get('/students',async(req,res)=>{const challenge=req.query.challengeId?await teacherChallenge(db,req):await resolveCurrentChallenge(db,req.user);res.json({students:(await filteredStudents(db,req.query,challenge,{records:false})).students.map(userDto)});});
   router.post('/students',async(req,res)=>{
     const fields=studentFields(req.body || {});const password=temporaryPassword();
     const user=await db.user.create({data:{...fields,role:'student',passwordHash:await hashPassword(password),mustChangePassword:true}}).catch(error=>duplicateNumber(error,fields.studentNumber));

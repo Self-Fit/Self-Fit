@@ -31,10 +31,17 @@ test('challenge migration backfills existing data exactly and enforces challenge
       for (const folder of oldMigrations) await executeMigration(folder);
       db = new PrismaClient({ datasourceUrl: url.toString() });
       const teacher = await db.user.create({ data: { role: 'teacher', studentNumber: 'TEST-TEACHER', name: '테스트 교사', passwordHash: 'TEST-ONLY-UNUSABLE-HASH' } });
-      const required = await db.user.create({ data: { role: 'student', studentNumber: 'TEST-REQUIRED', name: '필수 학생', grade: 1, classNumber: 1, targetType: 'required', participating: true, passwordHash: 'TEST-ONLY-UNUSABLE-HASH' } });
-      const requiredInactive = await db.user.create({ data: { role: 'student', studentNumber: 'TEST-REQUIRED-NOT-PARTICIPATING', name: '필수 기존 상태', grade: 1, classNumber: 1, targetType: 'required', participating: false, passwordHash: 'TEST-ONLY-UNUSABLE-HASH' } });
-      const optional = await db.user.create({ data: { role: 'student', studentNumber: 'TEST-OPTIONAL', name: '선택 학생', grade: 1, classNumber: 1, targetType: 'optional', participating: true, passwordHash: 'TEST-ONLY-UNUSABLE-HASH' } });
-      const outsider = await db.user.create({ data: { role: 'student', studentNumber: 'TEST-NONPARTICIPANT', name: '미참여 학생', grade: 1, classNumber: 1, targetType: 'optional', participating: false, passwordHash: 'TEST-ONLY-UNUSABLE-HASH' } });
+      // The current Prisma schema no longer has User.participating; raw inserts reproduce the old accounts.
+      const insertUser = async ({ role, studentNumber, name, grade = null, classNumber = null, targetType = null, participating = false, passwordHash }) => {
+        const id = randomUUID();
+        await db.$executeRaw`INSERT INTO "User" ("id", "role", "studentNumber", "name", "grade", "classNumber", "targetType", "participating", "passwordHash", "updatedAt")
+          VALUES (${id}, ${role}, ${studentNumber}, ${name}, ${grade}, ${classNumber}, ${targetType}, ${participating}, ${passwordHash}, CURRENT_TIMESTAMP)`;
+        return { id, role, studentNumber, name, grade, classNumber, targetType, participating };
+      };
+      const required = await insertUser({ role: 'student', studentNumber: 'TEST-REQUIRED', name: '필수 학생', grade: 1, classNumber: 1, targetType: 'required', participating: true, passwordHash: 'TEST-ONLY-UNUSABLE-HASH' });
+      const requiredInactive = await insertUser({ role: 'student', studentNumber: 'TEST-REQUIRED-NOT-PARTICIPATING', name: '필수 기존 상태', grade: 1, classNumber: 1, targetType: 'required', participating: false, passwordHash: 'TEST-ONLY-UNUSABLE-HASH' });
+      const optional = await insertUser({ role: 'student', studentNumber: 'TEST-OPTIONAL', name: '선택 학생', grade: 1, classNumber: 1, targetType: 'optional', participating: true, passwordHash: 'TEST-ONLY-UNUSABLE-HASH' });
+      const outsider = await insertUser({ role: 'student', studentNumber: 'TEST-NONPARTICIPANT', name: '미참여 학생', grade: 1, classNumber: 1, targetType: 'optional', participating: false, passwordHash: 'TEST-ONLY-UNUSABLE-HASH' });
       const source = await db.sourceDataset.create({ data: { hash: 'a'.repeat(64), filename: 'TEST-LEGACY.xlsx', metadataJson: {} } });
       await db.$executeRaw`UPDATE "SourceDataset" SET "metadataJson" = '{"original":0.12345678901234567890123456789,"revision":{"afterRecordsSha256":"TEST-IMMUTABLE-FINGERPRINT"}}'::jsonb WHERE "id" = ${source.id}`;
       await db.studentSource.create({ data: { datasetId: source.id, userId: required.id, rosterJson: ['TEST ONLY'], fitnessJson: { score: 30.25 } } });
@@ -113,6 +120,17 @@ test('challenge migration backfills existing data exactly and enforces challenge
           await tx.challengeWeek.updateMany({ where: { challengeId: challenge.id }, data: { startDate: '2027-03-08', endDate: '2027-03-14' } });
         });
         assert.equal((await db.challengeWeek.findFirst({ where: { challengeId: challenge.id } })).startDate, '2027-03-08');
+      });
+
+      await t.test('dropping User.participating keeps every legacy membership', async () => {
+        const memberships = await db.challengeMembership.findMany({ where: { challengeId: LEGACY_CHALLENGE_ID }, orderBy: { userId: 'asc' } });
+        assert.ok(memberships.length >= 2);
+        await executeMigration('20261021090000_drop_user_participating');
+        const [{ count }] = await db.$queryRaw`SELECT count(*)::int AS count FROM information_schema.columns
+          WHERE table_schema = current_schema() AND table_name = 'User' AND column_name = 'participating'`;
+        assert.equal(count, 0);
+        assert.deepEqual(await db.challengeMembership.findMany({ where: { challengeId: LEGACY_CHALLENGE_ID }, orderBy: { userId: 'asc' } }), memberships);
+        assert.equal((await db.user.findUnique({ where: { id: optional.id } })).studentNumber, 'TEST-OPTIONAL');
       });
     } finally {
       if (db) await db.$disconnect();

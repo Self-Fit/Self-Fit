@@ -123,7 +123,7 @@ test('isolated PostgreSQL import is atomic, exact, conflict-safe and idempotent'
     });
     db = new PrismaClient({ datasourceUrl: baseUrl.toString() });
     const source = fixture(undefined, 194), prepared = buildDumbbellData(source);
-    await db.user.createMany({ data: prepared.students.map(student => ({ role: 'student', studentNumber: student.studentNumber, name: student.name, grade: student.grade, classNumber: student.classNumber, participating: true, targetType: 'required', passwordHash: 'TEST-ONLY-NOT-A-LOGIN-HASH' })) });
+    await db.user.createMany({ data: prepared.students.map(student => ({ role: 'student', studentNumber: student.studentNumber, name: student.name, grade: student.grade, classNumber: student.classNumber, targetType: 'required', passwordHash: 'TEST-ONLY-NOT-A-LOGIN-HASH' })) });
     const user = await db.user.findUnique({ where: { studentNumber: '10101' } });
     const original = await db.dailyRecord.create({ data: { challengeId: LEGACY_CHALLENGE_ID, userId: user.id, date: '2026-05-25', value: 321 } });
     const prior = await db.sourceDataset.create({ data: { hash: 'b'.repeat(64), filename: 'TEST-PRIOR', metadataJson: { retained: true } } });

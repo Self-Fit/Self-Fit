@@ -36,7 +36,7 @@ export async function runMembershipApiCases(t, { db, request, a, temp }) {
   const makeStudent = async (label, options = {}) => {
     const row = await db.user.create({ data: {
       role: 'student', studentNumber: `member-${randomUUID()}`, name: `MEMBER TEST ${label}`,
-      grade: 91, classNumber: 1, targetType: 'optional', participating: false,
+      grade: 91, classNumber: 1, targetType: 'optional',
       passwordHash: a.passwordHash, mustChangePassword: false, weekendReminder: true, ...options,
     } });
     createdUsers.add(row.id);
@@ -471,7 +471,7 @@ export async function runMembershipApiCases(t, { db, request, a, temp }) {
       privacy(feed.data);
     });
 
-    await t.test('closed invitations stay visible until the end, the roster follows a chosen challenge, participating is read-only, and legacy routes are deprecated', async () => {
+    await t.test('closed invitations stay visible until the end, the roster follows a chosen challenge, accounts have no participation flag, and legacy routes are deprecated', async () => {
       beforeStart();
       const challenge = await makeChallenge();
       const invited = await makeStudent('CLOSED INVITATION'), enrolled = await makeStudent('ROSTER ACTIVE');
@@ -498,14 +498,15 @@ export async function runMembershipApiCases(t, { db, request, a, temp }) {
       const active = await teacher(`/teacher/students?challengeId=${challenge.id}&grade=91&participating=true`);
       assert.ok(active.data.students.some(user => user.id === enrolled.id));
       assert.ok(!active.data.students.some(user => user.id === invited.id));
-      assert.equal((await teacher('/teacher/students?grade=91')).data.students.find(user => user.id === enrolled.id).participating, false, 'without challengeId the account value is unchanged');
+      assert.equal(typeof (await teacher('/teacher/students?grade=91')).data.students.find(user => user.id === enrolled.id).participating, 'boolean', 'without challengeId the current challenge decides');
       error(await teacher('/teacher/students?challengeId=missing-challenge'), 404, 'CHALLENGE_NOT_FOUND');
 
       const created = await teacher('/teacher/students', { method: 'POST', body: { studentNumber: `member-${randomUUID()}`, name: 'MEMBER TEST REQUIRED', grade: 91, classNumber: 2, targetType: 'required' } });
       assert.equal(created.status, 201, JSON.stringify(created.data));
       createdUsers.add(created.data.user.id);
-      assert.equal(created.data.user.participating, false, 'a new required student is not enrolled anywhere until a teacher adds them');
-      assert.equal((await teacher(`/teacher/students/${invited.id}`, { method: 'PATCH', body: { targetType: 'required' } })).data.user.participating, false);
+      assert.equal(created.data.user.participating, null, 'account-level users have no participation flag (null = no challenge context)');
+      assert.equal(await db.challengeMembership.count({ where: { userId: created.data.user.id } }), 0, 'a new required student is not enrolled anywhere until a teacher adds them');
+      assert.equal((await teacher(`/teacher/students/${invited.id}`, { method: 'PATCH', body: { targetType: 'required' } })).data.user.participating, null);
 
       const deprecated = response => response.headers.get('deprecation');
       assert.equal(deprecated(await request('/student/dashboard', { cookie: enrolled.cookie })), 'true');

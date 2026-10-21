@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { hashPassword, validatePassword, verifyPassword } from '../src/password.js';
-import { buildParticipationData, legacyChallengeId, ensureLegacyMemberships } from './participation-data.js';
+import { buildParticipationData, legacyChallengeId, ensureLegacyMemberships, withSourceParticipation } from './participation-data.js';
 
 // Import is deliberately separate from student date-entry APIs. The supplied
 // historical dummy workbook does not authorize changing the live date or rules.
@@ -65,9 +65,9 @@ try {
     assert.equal(rows, prepared.students.length, 'Existing student import is incomplete');
     assert.equal(records, prepared.records.length, 'Existing record import is incomplete');
     const credentials = JSON.parse(await fs.readFile(credentialPath,'utf8'));
-    const existingUsers = await db.user.findMany({where:{studentNumber:{in:prepared.students.map(s=>s.studentNumber)}},select:{id:true,studentNumber:true,role:true,targetType:true,participating:true}});
+    const existingUsers = await db.user.findMany({where:{studentNumber:{in:prepared.students.map(s=>s.studentNumber)}},select:{id:true,studentNumber:true,role:true,targetType:true}});
     await db.$transaction(async tx=>{
-      await ensureLegacyMemberships(tx, existingUsers);
+      await ensureLegacyMemberships(tx, withSourceParticipation(existingUsers, prepared.students));
       await preserveExactSource(tx,existing.id,new Map(existingUsers.map(u=>[u.studentNumber,u.id])));
     },{timeout:120000});
     await finish(credentials, existing.id, existing.importedAt, null);
@@ -107,7 +107,7 @@ try {
     await db.$transaction(async tx=>{
       await tx.sourceDataset.create({data:{id:datasetId,hash:source.sha256,filename:source.filename,
         metadataJson:{transform:'same-exercise-week-block-v1'}}});
-      await tx.user.createMany({data:users});
+      await tx.user.createMany({data:users.map(({participating,...user})=>user)});
       await ensureLegacyMemberships(tx, users);
       await tx.studentSource.createMany({data:prepared.students.map(s=>({id:randomUUID(),datasetId,userId:userIds.get(s.studentNumber),
         rosterJson:[],metadataJson:{sourceSheet:'학생명단',sourceRow:s.sourceRow,

@@ -31,7 +31,7 @@ test('revision importer uses real isolated PostgreSQL transactions and preserves
       const source = makeRevisedSourceFixture(194), prepared = buildRevisedParticipationData(source);
       await db.user.createMany({ data: prepared.students.map((student, index) => ({
         id: randomUUID(), role: 'student', studentNumber: student.studentNumber, name: student.name, grade: student.grade,
-        classNumber: student.classNumber, participating: student.participating, targetType: student.targetType,
+        classNumber: student.classNumber, targetType: student.targetType,
         passwordHash: `TEST-ONLY-UNUSABLE-PASSWORD-${index}`, mustChangePassword: index !== 0, weekendReminder: index === 0,
         lastLoginAt: index === 0 ? originalTime : null, createdAt: originalTime, updatedAt: originalTime,
       })) });

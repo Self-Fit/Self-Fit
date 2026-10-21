@@ -175,6 +175,13 @@ export async function legacyChallengeId(db) {
   return challenge.id;
 }
 
+/** Accounts no longer store participation (20261021090000); the source workbook still says who took part. */
+export function withSourceParticipation(users, students) {
+  const byNumber = new Map(students.map(student => [student.studentNumber, student]));
+  return users.map(user => ({ ...user, participating: byNumber.get(user.studentNumber)?.participating ?? false }));
+}
+
+/** `users` carry `participating` from the source workbook (see withSourceParticipation). */
 export async function ensureLegacyMemberships(db, users, { apply = true, requireExisting = false } = {}) {
   const challengeId = await legacyChallengeId(db);
   const participants = users.filter(user => user.role === 'student'

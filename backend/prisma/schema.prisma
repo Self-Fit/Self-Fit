@@ -13,7 +13,6 @@ model User {
   grade              Int?
   classNumber        Int?
   targetType         String?
-  participating      Boolean @default(false)
   passwordHash       String
   mustChangePassword Boolean @default(true)
   weekendReminder    Boolean @default(false)

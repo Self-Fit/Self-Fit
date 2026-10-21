@@ -45,8 +45,8 @@ test('isolated PostgreSQL API integration', {skip:!process.env.TEST_DATABASE_URL
     const login=async(studentNumber,password)=>request('/auth/login',{method:'POST',body:{studentNumber,password}});
     const password='integration-only-password123';const passwordHash=await hashPassword(password);
     const teacher=await db.user.create({data:{role:'teacher',studentNumber:'test-teacher',name:'TEST ONLY',passwordHash,mustChangePassword:false}});
-    const a=await db.user.create({data:{role:'student',studentNumber:'test-001',name:'TEST A',grade:1,classNumber:1,targetType:'required',participating:true,passwordHash,mustChangePassword:false}});
-    const b=await db.user.create({data:{role:'student',studentNumber:'test-002',name:'TEST B',grade:1,classNumber:2,targetType:'optional',participating:false,passwordHash,mustChangePassword:false}});
+    const a=await db.user.create({data:{role:'student',studentNumber:'test-001',name:'TEST A',grade:1,classNumber:1,targetType:'required',passwordHash,mustChangePassword:false}});
+    const b=await db.user.create({data:{role:'student',studentNumber:'test-002',name:'TEST B',grade:1,classNumber:2,targetType:'optional',passwordHash,mustChangePassword:false}});
     await db.challengeMembership.create({data:{challengeId:legacyId,userId:a.id,mode:'forced',status:'active',invitedById:teacher.id}});
     const teacherCookie=(await login(teacher.studentNumber,password)).cookie;
     const aCookie=(await login(a.studentNumber,password)).cookie;
@@ -269,7 +269,7 @@ test('isolated PostgreSQL API integration', {skip:!process.env.TEST_DATABASE_URL
       const textExport=await request(`/teacher/export?studentIds=${b.id}`,{cookie:teacherCookie,raw:true});const textBook=new ExcelJS.Workbook();await textBook.xlsx.load(textExport.data);const cell=textBook.getWorksheet('참여자 요약').getRow(2).getCell(2);assert.equal(cell.type,ExcelJS.ValueType.String);assert.equal(cell.value,formulaName);
     });
     await t.test('push dispatch rechecks stale dates, completed goals and excluded days without blocking correction results',async()=>{
-      const user=await db.user.create({data:{role:'student',studentNumber:'test-notification-only',name:'TEST NOTIFICATION',grade:1,classNumber:1,targetType:'required',participating:true,passwordHash,mustChangePassword:false}});
+      const user=await db.user.create({data:{role:'student',studentNumber:'test-notification-only',name:'TEST NOTIFICATION',grade:1,classNumber:1,targetType:'required',passwordHash,mustChangePassword:false}});
       await db.challengeMembership.create({data:{challengeId:legacyId,userId:user.id,mode:'forced',status:'active',invitedById:teacher.id}});
       await db.pushSubscription.create({data:{userId:user.id,endpoint:'https://fcm.googleapis.com/test-only-no-network',p256dh:'test-only',auth:'test-only'}});
       t.mock.timers.enable({apis:['Date'],now:new Date('2026-06-09T11:00:00Z')});

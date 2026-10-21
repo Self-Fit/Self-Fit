@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import { buildRevisedParticipationData, REVISED_PARTICIPATION_TRANSFORM } from './revised-participation-data.js';
-import { legacyChallengeId, ensureLegacyMemberships } from './participation-data.js';
+import { legacyChallengeId, ensureLegacyMemberships, withSourceParticipation } from './participation-data.js';
 
 const PREVIOUS_TRANSFORMS = new Set(['same-exercise-week-block-v1', 'week12-dumbbell-sets-v1']);
 const sha256 = text => createHash('sha256').update(text).digest('hex');
@@ -105,22 +105,22 @@ export async function importRevisedParticipationData(db, source, { apply = false
     }
     const challengeId = await legacyChallengeId(tx);
     const users = await tx.user.findMany({ where: { role: 'student' },
-      select: { id: true, studentNumber: true, name: true, grade: true, classNumber: true, targetType: true, participating: true } });
+      select: { id: true, studentNumber: true, name: true, grade: true, classNumber: true, targetType: true } });
     assert.equal(users.length, prepared.students.length, 'The complete database student roster differs; no accounts will be created or changed');
     const byNumber = new Map(users.map(user => [user.studentNumber, user]));
     for (const student of prepared.students) {
       const user = byNumber.get(student.studentNumber);
       assert(user && user.name === student.name && user.grade === student.grade && user.classNumber === student.classNumber
-        && user.targetType === student.targetType && user.participating === student.participating,
+        && user.targetType === student.targetType,
       'Existing student identity or participation differs from the workbook');
     }
-    await ensureLegacyMemberships(tx, users.map(user => ({ ...user, role: 'student' })), { apply: false });
+    await ensureLegacyMemberships(tx, withSourceParticipation(users, prepared.students).map(user => ({ ...user, role: 'student' })), { apply: false });
     const ids = new Map(users.map(user => [user.studentNumber, user.id]));
     const expected = prepared.records.map(record => ({ challengeId, userId: ids.get(record.studentNumber), date: record.date, value: record.value, sourceMetadata: record.sourceMetadata }));
     const rows = sourceRows(prepared, ids), mode = apply ? 'apply' : 'dry-run';
     const existing = await tx.sourceDataset.findUnique({ where: { hash: source.sha256 }, select: { id: true } });
     if (existing) {
-      await ensureLegacyMemberships(tx, users.map(user => ({ ...user, role: 'student' })), { apply: false, requireExisting: true });
+      await ensureLegacyMemberships(tx, withSourceParticipation(users, prepared.students).map(user => ({ ...user, role: 'student' })), { apply: false, requireExisting: true });
       return { mode, alreadyImported: true, changed: false, datasetId: existing.id, ...prepared.summary,
         ...await verifySaved(tx, existing.id, source, prepared, expected, rows, challengeId) };
     }
@@ -143,7 +143,7 @@ export async function importRevisedParticipationData(db, source, { apply = false
       accountsCreated: 0, passwordsChanged: 0, sessionsChanged: 0, previousSourceRowsChanged: 0 };
     if (!apply) return { ...plan, changed: false, readyToApply: true };
 
-    await ensureLegacyMemberships(tx, users.map(user => ({ ...user, role: 'student' })));
+    await ensureLegacyMemberships(tx, withSourceParticipation(users, prepared.students).map(user => ({ ...user, role: 'student' })));
     const datasetId = randomUUID(), importedAt = new Date();
     const metadata = { ...baseMetadata(source, prepared), revision: {
       recordSnapshotVersion: 2, previousSources: sources, previousRecordsSha256: sha256(beforeText), operations: operations.counts, appliedAt: importedAt.toISOString(),

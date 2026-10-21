@@ -225,7 +225,7 @@ export async function runChallengeApiCases(t, { db, request, teacherCookie, a, b
         const staffCookie = await mintTestSession(staff.id);
         student = await db.user.create({ data: {
           role: 'student', studentNumber: `test-upload-${randomUUID()}`, name: 'TEST UPLOAD ARCHIVE RACE',
-          grade: 1, classNumber: 1, targetType: 'required', participating: true,
+          grade: 1, classNumber: 1, targetType: 'required',
           passwordHash: a.passwordHash, mustChangePassword: false,
         } });
         const studentCookie = await mintTestSession(student.id);
