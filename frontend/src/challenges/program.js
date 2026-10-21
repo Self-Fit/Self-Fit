@@ -9,6 +9,7 @@ export function programOf(challenge) {
     challengeId: challenge.id, title: challenge.title, year: challenge.year, today: challenge.today,
     status: STATUS[challenge.phase] || 'upcoming', startDate: challenge.startDate, endDate: challenge.endDate,
     weeks: challenge.weeks || [], activityDates: challenge.activityDates || [], week12Pending: false,
+    archived: challenge.lifecycle === 'archived',
   };
 }
 

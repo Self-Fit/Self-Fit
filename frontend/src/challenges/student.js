@@ -8,13 +8,39 @@ export const switchable = mine => (mine?.challenges || []).filter(item => item.m
 
 /** The challenge the student chose to look at; phase 3 puts it in the route. Falls back to the server's `current`. */
 export function selectedChallengeId(mine) {
-  const ids = switchable(mine).map(item => item.challenge.id);
+  const ids = [...switchable(mine), ...(mine?.archived || [])].map(item => item.challenge.id);
   let saved = null;
   try { saved = window.localStorage.getItem(KEY); } catch { /* storage may be blocked */ }
   return ids.includes(saved) ? saved : mine?.current?.challenge.id ?? ids[0] ?? null;
 }
 export function selectChallenge(id) {
-  try { window.localStorage.setItem(KEY, id); } catch { /* storage may be blocked */ }
+  try { if (id) window.localStorage.setItem(KEY, id); else window.localStorage.removeItem(KEY); } catch { /* storage may be blocked */ }
+}
+
+/** "보관된 챌린지를 보고 있어요" on home/records while an archived challenge is selected. */
+export function insertArchivedBanner(root, { mode, title, onLeave }) {
+  const banner = document.createElement('div');
+  banner.className = 'banner warn ch-invite-banner';
+  const text = document.createElement('div');
+  text.className = 'grow';
+  text.innerHTML = '<b></b>';
+  text.firstChild.textContent = `보관된 챌린지 · ${title}`;
+  const hint = document.createElement('span');
+  hint.className = 'ch-invite-hint';
+  hint.textContent = ' 기록을 볼 수만 있어요.';
+  text.append(hint);
+  const action = document.createElement('button');
+  action.type = 'button';
+  action.className = 'act';
+  action.textContent = '현재 챌린지로';
+  action.onclick = onLeave;
+  banner.append(icon('history'), text, action);
+  if (mode === 'web') root.querySelector('main.w-main')?.prepend(banner);
+  else {
+    const anchor = root.querySelector('.scroll .page .page-sub') || root.querySelector('.scroll .page .page-title');
+    banner.classList.add('mt16');
+    anchor?.after(banner);
+  }
 }
 
 const isClosed = item => item.challenge.today > item.challenge.enrollmentDeadline;
@@ -62,7 +88,7 @@ export function insertInvitationBanner(root, { mode, count, onOpen }) {
 export function insertChallengeEntry(root, { mode, mine, onOpen, onSwitch }) {
   if (!mine) return;
   const options = switchable(mine), selected = selectedChallengeId(mine);
-  const current = options.find(item => item.challenge.id === selected) || mine.current;
+  const current = [...options, ...(mine.archived || [])].find(item => item.challenge.id === selected) || mine.current;
   const invitations = openInvitations(mine).length;
   const label = current ? current.challenge.title : '참여 중인 챌린지가 없어요';
   if (mode === 'mobile') {

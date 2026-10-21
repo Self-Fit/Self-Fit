@@ -6,7 +6,7 @@ import { programOf } from './program.js';
 
 // Which challenge the teacher's overview, participation, corrections, student detail, export and
 // schedule screens show. URL `?challengeId=` wins, then the last choice, then the server's "current"
-// challenge (published, latest startDate — the list is sorted that way, README §5).
+// challenge (`currentId`: the one in progress first, README §5).
 const KEY = 'self-fit.teacher.challengeId';
 const read = () => { try { return window.localStorage.getItem(KEY); } catch { return null; } };
 const write = id => { try { if (id) window.localStorage.setItem(KEY, id); else window.localStorage.removeItem(KEY); } catch { /* storage may be blocked */ } };
@@ -18,7 +18,7 @@ export function TeacherChallengeProvider({ scoped, children }) {
   const fromUrl = new URLSearchParams(search).get('challengeId');
   const list = useLoad(() => listChallenges({ lifecycle: 'all' }), []);
   const options = useMemo(() => (list.data?.challenges || []).filter(challenge => challenge.lifecycle !== 'draft'), [list.data]);
-  const current = options.find(challenge => challenge.lifecycle === 'published') || null;
+  const current = options.find(challenge => challenge.id === list.data?.currentId) || null;
   const requested = fromUrl || read();
   const selectedId = requested && options.some(challenge => challenge.id === requested) ? requested : null;
   const id = selectedId || current?.id || null;

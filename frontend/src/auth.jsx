@@ -9,7 +9,10 @@ export function Login({mode='web',teacher=false}){
   const {setUser}=useSession();const [role,setRole]=useState(teacher?'teacher':'student');
   const id=mode==='web'?(role==='teacher'?'WT-01':'WS-01'):(role==='teacher'?'MT-01':'MS-01');
   const setup=useCallback(root=>{
-    cleanContact(root);const inputs=[...root.querySelectorAll('input')];const [account,password]=inputs;const submit=root.querySelector('.btn.primary');let busy=false;
+    cleanContact(root);
+    // The design copy names the first 12-week program; challenges now vary in length.
+    root.querySelectorAll('.fs15.t2').forEach(node=>{if(node.textContent.includes('12주'))node.textContent='챌린지 운동 기록, 학번으로 시작해요.';});
+    const inputs=[...root.querySelectorAll('input')];const [account,password]=inputs;const submit=root.querySelector('.btn.primary');let busy=false;
     account.value='';password.value='';account.autocomplete='username';password.autocomplete='current-password';account.name='username';password.name='password';account.required=password.required=true;account.id='login-account';password.id='login-password';account.closest('.field').querySelector('label').htmlFor=account.id;password.closest('.field').querySelector('label').htmlFor=password.id;revealPassword(password);
     const refresh=()=>{submit.disabled=busy||!account.value.trim()||!password.value;submit.classList.toggle('disabled',submit.disabled);};inputs.forEach(input=>input.addEventListener('input',refresh));refresh();
     const run=async()=>{if(submit.disabled)return;busy=true;refresh();submit.textContent='로그인 중…';root.querySelector('[data-auth-error]')?.remove();try{const {user}=await api('/auth/login',{method:'POST',body:{studentNumber:account.value.trim(),password:password.value}});setUser(user);navigate(`/${mode}${user.mustChangePassword?'/password/setup':user.role==='teacher'?'/admin':''}`,true);}catch(error){showError(root,error,submit);}finally{busy=false;submit.textContent='로그인';refresh();}};

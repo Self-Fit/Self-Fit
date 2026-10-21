@@ -59,6 +59,7 @@ export default function MyChallenges({ mode, user, onLogout, onChange }) {
   const [notice, setNotice] = useState(null);
   const [busy, run] = useAction(error => { setNotice(error); if (error.code === 'INVITATION_CLOSED' || error.code === 'NO_INVITATION') result.refresh(); });
   const [selectedId, setSelectedId] = useState(null);
+  const [tab, setTab] = useState('current');
   const mine = result.data;
   const selected = selectedId || (mine && selectedChallengeId(mine));
   const reload = () => { result.refresh(); onChange?.(); };
@@ -75,6 +76,7 @@ export default function MyChallenges({ mode, user, onLogout, onChange }) {
     if (data) { reload(); toast('초대를 거절했어요.'); }
   }
   function choose(id) { selectChallenge(id); setSelectedId(id); toast('보고 있는 챌린지를 바꿨어요.'); }
+  function openArchived(id) { selectChallenge(id); onChange?.(); navigate(`/${mode}`); }
 
   let body;
   if (result.loading && !mine) body = <Loading />;
@@ -86,17 +88,34 @@ export default function MyChallenges({ mode, user, onLogout, onChange }) {
     const ongoing = active.filter(item => item.challenge.phase !== 'ended');
     const past = active.filter(item => item.challenge.phase === 'ended');
     const closedInvites = mine.closedInvitations || [];
+    const archived = mine.archived || [];
     const options = switchable(mine);
     const section = (title, count, children) => <section className="ch-student-section" aria-label={title}><h2 className="fs16 fw8">{title} <span className="muted fw7">{count}</span></h2><div className="mt12">{children}</div></section>;
-    body = <div className="stack gap24">
+    const tabs = archived.length > 0 && <div className="seg ch-student-tabs" role="tablist" aria-label="내 챌린지 보기">
+      <button type="button" role="tab" aria-selected={tab === 'current'} className={tab === 'current' ? 'on' : ''} onClick={() => setTab('current')}>챌린지</button>
+      <button type="button" role="tab" aria-selected={tab === 'archived'} className={tab === 'archived' ? 'on' : ''} onClick={() => setTab('archived')}>보관함 <span className="n">{archived.length}</span></button>
+    </div>;
+    if (tab === 'archived' && archived.length) body = <div className="stack gap24">
       <MockNotice />
+      {tabs}
+      <section className="ch-student-section" aria-label="보관된 챌린지">
+        <p className="fs13 muted">선생님이 보관한 챌린지예요. 기록을 볼 수만 있고 새로 입력하거나 정정할 수는 없어요.</p>
+        <div className="list mt12">{archived.map(item => <div className="li ch-mine" key={item.challenge.id}>
+          <div className="grow"><div className="row gap8"><PhaseChip phase="archived" />{item.challenge.id === selected && <span className="chip line">보고 있는 챌린지</span>}</div><div className="k mt8">{item.challenge.title}</div><div className="sub">{periodText(item.challenge.startDate, item.challenge.endDate)} · {item.challenge.weekCount}주차</div></div>
+          <button type="button" className="btn secondary sm" onClick={() => openArchived(item.challenge.id)}>기록 보기</button>
+        </div>)}</div>
+      </section>
+    </div>;
+    else body = <div className="stack gap24">
+      <MockNotice />
+      {tabs}
       {notice && <ErrorNotice error={notice} />}
       {options.length > 1 && <label className="card pad ch-switch"><span className="fw7 fs14">보고 있는 챌린지</span><div className="ch-select"><select value={selected || ''} onChange={event => choose(event.target.value)}>{options.map(item => <option key={item.challenge.id} value={item.challenge.id}>{item.challenge.title}</option>)}</select><Icon name="chevron" size={16} /></div><span className="help">홈과 기록 화면에 보일 챌린지예요.</span></label>}
       {invitations.length > 0 && section('받은 초대', invitations.length, <div className="stack gap12">{invitations.map(item => <InvitationCard key={item.challenge.id} {...{ item, busy }} onAccept={accept} onDecline={setDeclining} />)}</div>)}
       {section('참여 중', ongoing.length, ongoing.length ? <div className="list">{ongoing.map(item => <ChallengeRow key={item.challenge.id} item={item} selected={item.challenge.id === selected} />)}</div> : <p className="fs14 muted">지금 참여 중인 챌린지가 없어요.{invitations.length ? ' 받은 초대를 확인해 보세요.' : ''}</p>)}
       {closedInvites.length > 0 && section('마감된 초대', closedInvites.length, <div className="stack gap12">{closedInvites.map(item => <InvitationCard key={item.challenge.id} {...{ item, busy }} onAccept={accept} onDecline={setDeclining} />)}</div>)}
       {past.length > 0 && section('지난 챌린지', past.length, <div className="list">{past.map(item => <ChallengeRow key={item.challenge.id} item={item} selected={item.challenge.id === selected} />)}</div>)}
-      {!invitations.length && !items.length && !closedInvites.length && <div className="card"><EmptyState title="아직 챌린지가 없어요.">선생님이 챌린지에 등록하거나 초대하면 여기에서 확인할 수 있어요.</EmptyState></div>}
+      {!invitations.length && !items.length && !closedInvites.length && !archived.length && <div className="card"><EmptyState title="아직 챌린지가 없어요.">선생님이 챌린지에 등록하거나 초대하면 여기에서 확인할 수 있어요.</EmptyState></div>}
     </div>;
   }
   return <AppFrame {...{ mode, user, onLogout }} title={mode === 'mobile' ? '내 챌린지' : undefined} back={mode === 'mobile' ? () => navigate(`/${mode}`) : undefined}>

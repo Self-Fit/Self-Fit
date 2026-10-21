@@ -173,3 +173,5 @@
 .ch-scope.is-mobile select{max-width:none;width:100%}
 .ch-scope-bar{margin-bottom:16px}
 .scroll>.ch-scope-bar{padding:16px 16px 0;margin-bottom:0}
+.ch-student-tabs{align-self:flex-start}
+.ch-invite-banner button.act{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}

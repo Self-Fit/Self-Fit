@@ -95,10 +95,20 @@ function find(id) {
 }
 const numbered = weeks => weeks.map((week, index) => ({ id: week.id || newId('w'), week: index + 1, ...normalizeWeek(week) }));
 
+// Teacher "current challenge" (README §5): in progress first, then the next to start, then the latest ended.
+const TEACHER_PRIORITY = { active: 0, rest: 1, upcoming: 2, ended: 3 };
+function teacherCurrent() {
+  const ranked = [...state.challenges.values()].filter(challenge => challenge.lifecycle === 'published').map(challenge => ({ challenge, phase: phaseOf(challenge) }));
+  ranked.sort((left, right) => TEACHER_PRIORITY[left.phase] - TEACHER_PRIORITY[right.phase]
+    || (left.phase === 'upcoming' ? left.challenge.startDate.localeCompare(right.challenge.startDate)
+      : left.phase === 'ended' ? right.challenge.endDate.localeCompare(left.challenge.endDate) : right.challenge.startDate.localeCompare(left.challenge.startDate)));
+  return ranked[0]?.challenge ?? null;
+}
+
 export async function listChallenges({ lifecycle = 'all' } = {}) {
   await wait();
   const items = [...state.challenges.values()].filter(challenge => lifecycle === 'all' || challenge.lifecycle === lifecycle);
-  return { challenges: items.sort((a, b) => b.startDate.localeCompare(a.startDate)).map(summary) };
+  return { challenges: items.sort((a, b) => b.startDate.localeCompare(a.startDate)).map(summary), currentId: teacherCurrent()?.id ?? null };
 }
 
 export async function getChallenge(id) {
@@ -284,13 +294,14 @@ const PHASE_ORDER = ['active', 'upcoming', 'rest'];
 function mine() {
   return state.memberships.filter(member => member.userId === ME && ['active', 'pending'].includes(member.status))
     .map(member => ({ member, challenge: state.challenges.get(member.challengeId) }))
-    .filter(entry => entry.challenge?.lifecycle === 'published');
+    .filter(entry => ['published', 'archived'].includes(entry.challenge?.lifecycle));
 }
 const entry = ({ member, challenge }) => ({ challenge: summary(challenge), membership: self(member) });
 
 export async function listMyChallenges() {
   await wait();
-  const date = today(), entries = mine().sort((a, b) => b.challenge.startDate.localeCompare(a.challenge.startDate));
+  const date = today(), all = mine().sort((a, b) => b.challenge.startDate.localeCompare(a.challenge.startDate));
+  const entries = all.filter(item => item.challenge.lifecycle === 'published');
   const open = item => item.member.mode === 'invited' && item.member.status === 'pending' && date <= item.challenge.enrollmentDeadline;
   const active = entries.filter(item => item.member.status === 'active');
   const current = PHASE_ORDER.map(phase => active.find(item => phaseOf(item.challenge) === phase)).find(Boolean)
@@ -300,6 +311,7 @@ export async function listMyChallenges() {
     // Same as the server: confirmed memberships only. An expired invitation simply disappears.
     challenges: active.map(entry),
     invitations: entries.filter(open).map(entry),
+    archived: all.filter(item => item.challenge.lifecycle === 'archived' && item.member.status === 'active').map(entry),
     closedInvitations: entries.filter(item => item.member.mode === 'invited' && item.member.status === 'pending' && date > item.challenge.enrollmentDeadline && date <= item.challenge.endDate).map(entry),
   };
 }
@@ -329,7 +341,8 @@ export async function declineInvitation(id) {
 export async function getStudentChallenge(id) {
   await wait();
   const challenge = state.challenges.get(id);
-  if (!challenge || challenge.lifecycle !== 'published') fail('CHALLENGE_NOT_FOUND', 404);
+  const readable = challenge?.lifecycle === 'published' || (challenge?.lifecycle === 'archived' && membershipOf(id, ME)?.status === 'active');
+  if (!readable) fail('CHALLENGE_NOT_FOUND', 404);
   return { challenge: detail(challenge) };
 }
 
