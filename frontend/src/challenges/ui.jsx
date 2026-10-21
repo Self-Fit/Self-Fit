@@ -11,7 +11,8 @@ export function useLoad(loader, deps) {
   useEffect(() => {
     let active = true;
     setState(old => ({ ...old, loading: true, error: null }));
-    latest.current().then(data => active && setState({ data, loading: false, error: null }), error => active && setState({ data: null, loading: false, error }));
+    // Same JSON keeps the same object, so design-template screens (setup deps) are not rebuilt on every refresh.
+    latest.current().then(data => active && setState(old => ({ data: old.data !== null && JSON.stringify(old.data) === JSON.stringify(data) ? old.data : data, loading: false, error: null })), error => active && setState({ data: null, loading: false, error }));
     return () => { active = false; };
   }, [...deps, tick]);
   return { ...state, refresh: useCallback(() => setTick(value => value + 1), []) };

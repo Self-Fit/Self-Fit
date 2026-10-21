@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ErrorNotice, Icon, Loading, useResource } from './shared.jsx';
+import { useTeacherChallenge } from './challenges/scope.jsx';
 import './participation.css';
 
 const countFormat = new Intl.NumberFormat('ko-KR');
@@ -58,8 +59,9 @@ export default function Participation({ mode }) {
   const mobile = mode === 'mobile';
   const [filters, setFilters] = useState(initialFilters);
   const [comparison, setComparison] = useState('grades');
-  const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value !== '')).toString();
-  const resource = useResource(`/teacher/participation${query ? `?${query}` : ''}`);
+  const scope = useTeacherChallenge();
+  const query = new URLSearchParams([...Object.entries(filters).filter(([, value]) => value !== ''), ['challengeId', scope.id]]).toString();
+  const resource = useResource(`/teacher/participation?${query}`);
   const optionsRef = useRef({ grades: [], classes: [] });
   useEffect(() => { if (resource.data?.filterOptions) optionsRef.current = resource.data.filterOptions; }, [resource.data]);
   const options = resource.data?.filterOptions || optionsRef.current;

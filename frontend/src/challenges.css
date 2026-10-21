@@ -163,3 +163,13 @@
 .ch-entry-select{height:40px;border:1px solid var(--line-2);border-radius:12px;padding:0 10px;font:inherit;font-size:14px;max-width:240px}
 .ch-entry-value{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mobile-app .ch-invite-hint{display:none}
+
+/* Phase 3: teacher challenge selector (web header / top of mobile pages) */
+.ch-scope{position:relative;display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 30px 0 12px;border:1px solid var(--line-2);border-radius:var(--r-pill);background:#fff;color:var(--g-deep);max-width:300px;flex-shrink:1;min-width:0}
+.ch-scope select{appearance:none;border:0;background:transparent;font:inherit;font-size:13px;font-weight:700;color:var(--t1);min-width:0;max-width:240px;text-overflow:ellipsis;cursor:pointer;outline:none}
+.ch-scope:focus-within{border-color:var(--g);box-shadow:0 0 0 2px var(--g-soft-2)}
+.ch-scope .ch-scope-chev{position:absolute;right:11px;pointer-events:none;color:var(--t3);transform:rotate(90deg)}
+.ch-scope.is-mobile{display:flex;width:100%;max-width:none}
+.ch-scope.is-mobile select{max-width:none;width:100%}
+.ch-scope-bar{margin-bottom:16px}
+.scroll>.ch-scope-bar{padding:16px 16px 0;margin-bottom:0}

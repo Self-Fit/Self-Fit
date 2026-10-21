@@ -1,7 +1,13 @@
-import React,{useCallback} from 'react';
+import React,{useCallback,useMemo} from 'react';
 import { Icon, Modal, navigate, DesignTemplate, useResource } from './shared';
 import { dateText, dateRange, dayIndex, weekdays, formatNumber, recordOf, summaryOf, weekLabel, valueLabel, dailyAchieved } from './student-utils';
 
+/** GET /student/corrections is account-wide; keep the current challenge's requests only. */
+export function useChallengeCorrections(revision,challengeId,enabled=true){
+  const resource=useResource(enabled?'/student/corrections':null,revision);
+  const data=useMemo(()=>resource.data&&{...resource.data,corrections:(resource.data.corrections||[]).filter(item=>!challengeId||!item.challengeId||item.challengeId===challengeId)},[resource.data,challengeId]);
+  return {...resource,data};
+}
 export function StudentPage({mode,title,subtitle,children,wide=false}) { return mode==='web'?<main className={`w-main ${wide?'wide':''}`}>{title&&<div className="w-title"><div><h1>{title}</h1>{subtitle&&<p>{subtitle}</p>}</div></div>}<div className={title?'mt24':''}>{children}</div></main>:<div className="scroll"><div className="page">{title&&<><div className="page-title">{title}</div>{subtitle&&<div className="page-sub">{subtitle}</div>}</>}<div className={title?'mt20':''}>{children}</div></div></div>; }
 export function WeekDays({week,records=[],today,mode,onDate}) {
   return <div className="days">{dateRange(week.startDate,week.endDate).map(date=>{const record=recordOf(records,date);const weekend=[0,6].includes(dayIndex(date));const achieved=record&&dailyAchieved(week,record.value);let status=date>today?'future':record?achieved?'done':'miss':'none';if(date===today)status='today';return <div className={`day ${weekend?'we-l':''}`} key={date}><button className={`c ${status} ${weekend?'we':''}`} onClick={()=>onDate?onDate(date):navigate(`/${mode}/records/${date}`)} aria-label={`${dateText(date,true)}, ${record?valueLabel(week,record.value):date>today?'예정':'미입력'}`}>{Number(date.slice(-2))}</button>{weekdays[dayIndex(date)]}</div>;})}</div>;
@@ -9,8 +15,8 @@ export function WeekDays({week,records=[],today,mode,onDate}) {
 export function WeekSummary({week,summary={},records=[],today,mode,onDate}) {
   return <div className="card pad"><div className="row"><div className="q grow">{week.week}주차 · {week.title}</div><span className="fs13 muted fw6">{dateText(week.startDate)} – {dateText(week.endDate)}</span></div><div className="fs13 t2 mt4">{week.description}</div>{week.deferred?<div className="banner warn mt16"><Icon name="info"/>세부 운동과 완료 조건을 확인 중이에요.</div>:<><WeekDays {...{week,records,today,mode,onDate}}/><div className="divider mt20"/><div className="row mt16 fs14"><span className="grow t2">이번 주</span><b className="num-font">{formatNumber(summary.total)} / {formatNumber(week.weeklyTarget)}{week.unit}</b></div><div className="bar mt8"><i style={{width:`${Math.min(100,(summary.progress||0)*100)}%`}}/></div><div className="legend"><span><i style={{background:'var(--g)'}}/>평일 {formatNumber(summary.weekdayTotal)}{week.unit}</span><span><i style={{background:'#86D6B2'}}/>주말 {formatNumber(summary.weekendTotal)}{week.unit}</span>{summary.complete&&<span className="gtext">주간 완료</span>}</div></>}</div>;
 }
-export function WeekModal({week,summary={},records,today,mode,onClose}) {
-  const corrections=useResource(mode==='mobile'?'/student/corrections':null);
+export function WeekModal({week,summary={},records,today,mode,onClose,challengeId}) {
+  const corrections=useChallengeCorrections(undefined,challengeId,mode==='mobile');
   const setup=useCallback(root=>{
     const text=(selector,content)=>{const e=root.querySelector(selector);if(e)e.textContent=content;};
     text('.m-hd .t',`${week.week}주차 · ${week.title}`);

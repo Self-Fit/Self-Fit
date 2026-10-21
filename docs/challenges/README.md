@@ -128,18 +128,20 @@ phase 3 전까지 기존 경로는 그대로 동작해야 한다. 서버가 요�
 - 교사: `published` 중 startDate가 가장 늦은 것. `challengeId` 쿼리로 명시하면 그것.
 - `/program`은 교사·학생 공통으로 "현재 챌린지"를 돌려주되 응답 모양은 기존과 같다(`weeks`, `activityDates`, `status`…) + `challengeId`.
 
-## 6. 기존 코드에서 바뀌는 접점
+## 6. 기존 코드에서 바뀐 접점 (phase 3 완료 기준 최종 상태)
 
-| 파일 | 지금 | 바뀜 |
+| 파일 | 이전 | 지금 |
 | --- | --- | --- |
-| `backend/src/domain/index.js` | `WEEKS` 상수를 모든 함수가 직접 참조, 2026 날짜 하드코딩 24곳 | 함수가 `weeks` 배열을 받음. `WEEKS`는 `LEGACY_WEEKS`로 이름만 남겨 마이그레이션·적재 스크립트·테스트가 사용 |
-| `backend/src/dto.js` `programDto` | 인자 없음 | `programDto(challenge)` |
-| `backend/src/student.js` | `/student/*`가 사용자 기록 전체 | 챌린지 범위 경로 `/student/challenges/:id/*` 추가, 레거시 경로는 현재 챌린지로 해석 |
-| `backend/src/teacher.js`, `participation.js`, `export.js` | 전교생·전체 기록 | `challengeId`로 범위 제한, 분모는 `active` 참여자 |
-| `backend/src/notifications.js` | `reminder:<user>:<date>` | `reminder:<challengeId>:<user>:<date>`, 챌린지별 주차로 판정 |
-| `backend/scripts/import-*.js` | DailyRecord에 challengeId 없음 | 레거시 챌린지 id를 넣어야 함(phase 1 BE 체크리스트) |
-| `frontend/src/student.jsx` 등 | `/student/dashboard` 하나 | phase 3에서 `/student/challenges/:id/...`로 전환, 챌린지 전환 UI |
-| `frontend/src/teacher.jsx` | 챌린지 개념 없음 | 챌린지 관리 메뉴 추가, 기존 화면은 선택된 챌린지 범위 |
+| `backend/src/domain/index.js` | `WEEKS` 상수를 모든 함수가 직접 참조 | 함수가 `weeks` 배열을 받음. `LEGACY_WEEKS`는 도메인 모듈·마이그레이션·적재 스크립트·테스트에서만 사용 |
+| `backend/src/dto.js` `programDto` | 인자 없음 | `programDto(challenge)` (레거시 `/program`·`/student/dashboard`용) |
+| `backend/src/student.js`, `student-challenges.js` | `/student/*`가 사용자 기록 전체 | `/student/challenges/:id/*`가 기준. 레거시 경로는 현재 챌린지로 해석하고 `Deprecation: true`를 붙임(다음 릴리스에서 제거) |
+| `backend/src/teacher.js`, `participation.js`, `export.js` | 전교생·전체 기록 | `challengeId`로 범위 제한, 분모는 `active` 참여자. `/teacher/students?challengeId=`는 그 챌린지 기준 참여 여부 |
+| `User.participating` | 참여 여부 | 읽기 전용 레거시 값. 학생 생성·명단 등록·수정에서 더 이상 쓰지 않음(제거는 별도 마이그레이션 결정) |
+| `backend/src/notifications.js` | `reminder:<user>:<date>` | `reminder:<challengeId>:<user>:<date>`만 생성, 챌린지별 주차로 판정 |
+| `backend/scripts/import-*.js` | DailyRecord에 challengeId 없음 | 레거시 챌린지 id로 적재 |
+| `frontend/src/student.jsx` 등 | `/student/dashboard` 하나 | `GET /student/challenges`로 고른 챌린지의 `/student/challenges/:id/dashboard`·`records` 사용. 전환 메뉴(내 챌린지·마이) 선택이 화면에 반영 |
+| `frontend/src/teacher.jsx`, `participation.jsx` | 챌린지 개념 없음 | 챌린지 관리 메뉴 + 상단 `ChallengeSelector`(`?challengeId=`). 운영 일정은 고른 챌린지의 주차를 보여주고 `/program`을 쓰지 않음 |
+| `tests/browser-fixture.mjs` | 2026 프로그램만 | 레거시 기록 + 오늘 기준 진행 중·예정 챌린지, 강제 등록·초대 시드 |
 
 ## 7. Phase 분할과 완료 기준
 

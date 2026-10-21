@@ -85,6 +85,7 @@ export default function MyChallenges({ mode, user, onLogout, onChange }) {
     const active = items.filter(item => item.membership.status === 'active');
     const ongoing = active.filter(item => item.challenge.phase !== 'ended');
     const past = active.filter(item => item.challenge.phase === 'ended');
+    const closedInvites = mine.closedInvitations || [];
     const options = switchable(mine);
     const section = (title, count, children) => <section className="ch-student-section" aria-label={title}><h2 className="fs16 fw8">{title} <span className="muted fw7">{count}</span></h2><div className="mt12">{children}</div></section>;
     body = <div className="stack gap24">
@@ -93,8 +94,9 @@ export default function MyChallenges({ mode, user, onLogout, onChange }) {
       {options.length > 1 && <label className="card pad ch-switch"><span className="fw7 fs14">보고 있는 챌린지</span><div className="ch-select"><select value={selected || ''} onChange={event => choose(event.target.value)}>{options.map(item => <option key={item.challenge.id} value={item.challenge.id}>{item.challenge.title}</option>)}</select><Icon name="chevron" size={16} /></div><span className="help">홈과 기록 화면에 보일 챌린지예요.</span></label>}
       {invitations.length > 0 && section('받은 초대', invitations.length, <div className="stack gap12">{invitations.map(item => <InvitationCard key={item.challenge.id} {...{ item, busy }} onAccept={accept} onDecline={setDeclining} />)}</div>)}
       {section('참여 중', ongoing.length, ongoing.length ? <div className="list">{ongoing.map(item => <ChallengeRow key={item.challenge.id} item={item} selected={item.challenge.id === selected} />)}</div> : <p className="fs14 muted">지금 참여 중인 챌린지가 없어요.{invitations.length ? ' 받은 초대를 확인해 보세요.' : ''}</p>)}
+      {closedInvites.length > 0 && section('마감된 초대', closedInvites.length, <div className="stack gap12">{closedInvites.map(item => <InvitationCard key={item.challenge.id} {...{ item, busy }} onAccept={accept} onDecline={setDeclining} />)}</div>)}
       {past.length > 0 && section('지난 챌린지', past.length, <div className="list">{past.map(item => <ChallengeRow key={item.challenge.id} item={item} selected={item.challenge.id === selected} />)}</div>)}
-      {!invitations.length && !items.length && <div className="card"><EmptyState title="아직 챌린지가 없어요.">선생님이 챌린지에 등록하거나 초대하면 여기에서 확인할 수 있어요.</EmptyState></div>}
+      {!invitations.length && !items.length && !closedInvites.length && <div className="card"><EmptyState title="아직 챌린지가 없어요.">선생님이 챌린지에 등록하거나 초대하면 여기에서 확인할 수 있어요.</EmptyState></div>}
     </div>;
   }
   return <AppFrame {...{ mode, user, onLogout }} title={mode === 'mobile' ? '내 챌린지' : undefined} back={mode === 'mobile' ? () => navigate(`/${mode}`) : undefined}>

@@ -300,6 +300,7 @@ export async function listMyChallenges() {
     // Same as the server: confirmed memberships only. An expired invitation simply disappears.
     challenges: active.map(entry),
     invitations: entries.filter(open).map(entry),
+    closedInvitations: entries.filter(item => item.member.mode === 'invited' && item.member.status === 'pending' && date > item.challenge.enrollmentDeadline && date <= item.challenge.endDate).map(entry),
   };
 }
 
