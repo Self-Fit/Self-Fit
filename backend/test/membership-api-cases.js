@@ -304,6 +304,8 @@ export async function runMembershipApiCases(t, { db, request, a, temp }) {
       assert.deepEqual(afterArchive.archived.map(item => item.challenge.id), [challenge.id]);
       assert.deepEqual(keys(afterArchive.archived[0]), keys(studentFixture.challenges[0]));
       for (const suffix of ['/dashboard', '/records', '/records/2027-03-02']) assert.equal((await request(`/student/challenges/${challenge.id}${suffix}`, { cookie: owner.cookie })).status, 200, suffix);
+      clock('2027-03-02T01:00:00Z');
+      assert.equal((await request(`/student/challenges/${challenge.id}/records/2027-03-02`, { cookie: owner.cookie })).data.editable, false, 'an archived challenge is never editable, even on an activity day');
       error(await request(`/student/challenges/${challenge.id}/dashboard`, { cookie: outsider.cookie }), 404, 'CHALLENGE_NOT_FOUND');
       error(await request(`/student/challenges/${challenge.id}/records/2027-03-02`, { cookie: owner.cookie, method: 'PUT', body: { value: 100 } }), 409, 'CHALLENGE_ARCHIVED');
       error(await request(`/student/challenges/${challenge.id}/records/2027-03-02/corrections`, { cookie: owner.cookie, method: 'POST', body: { value: 100, version: 1, reason: '보관 검증' } }), 409, 'CHALLENGE_ARCHIVED');

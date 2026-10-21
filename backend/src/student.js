@@ -54,7 +54,7 @@ export function studentRecordRouter(db,{legacy=false}={}) {
     if(!req.challenge) return res.json({record:null,corrections:[],revisions:[],week:null,dailyStatus:'inactive',editable:false});
     const record=await db.dailyRecord.findUnique({where:{challengeId_userId_date:{challengeId:req.challenge.id,userId:req.user.id,date}},include:{attachments:true,corrections:{include:correctionInclude,orderBy:{createdAt:'desc'}},revisions:{orderBy:{createdAt:'desc'}}}});
     const week=getWeekForDate(req.challenge.weeks,date);
-    res.json({record:recordDto(record),corrections:(record?.corrections || []).map(correctionDto),revisions:record?.revisions || [],week,dailyStatus:dailyStatus(week,record?.value,date),editable:req.membership?.status==='active' && canWriteDate(req.challenge.weeks,date) && !week?.deferred});
+    res.json({record:recordDto(record),corrections:(record?.corrections || []).map(correctionDto),revisions:record?.revisions || [],week,dailyStatus:dailyStatus(week,record?.value,date),editable:req.challenge.lifecycle==='published' && req.membership?.status==='active' && canWriteDate(req.challenge.weeks,date) && !week?.deferred});
   });
   router.put('/records/:date',async(req,res)=>{
     const date=dateParam(req.params.date); checkEditable({...req.user,participating:req.membership?.status==='active'},req.challenge,date); checkValue(req.challenge,date,req.body?.value);
