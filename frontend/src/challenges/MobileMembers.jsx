@@ -1,6 +1,7 @@
 import React from 'react';
 import { ErrorNotice, Icon, Loading } from '../shared.jsx';
 import { listMembers } from './index.js';
+import { fitnessGradeLabel } from '../fitness-grades.js';
 import { useLoad } from './ui.jsx';
 import { MemberStats, ModeChip, StatusChip, enrollmentWindow } from './members.jsx';
 
@@ -14,7 +15,7 @@ export default function MobileMembers({ challenge }) {
     {result.loading && !result.data ? <Loading /> : result.error ? <div className="mt12"><ErrorNotice error={result.error} retry={result.refresh} /></div> : <>
       <div className="mt12"><MemberStats stats={result.data.stats} compact /></div>
       {members.length ? <div className="list mt12">{members.map(member => <div className="li ch-member-li" key={member.id}>
-        <div className="grow"><div className="k">{member.user.name}</div><div className="sub">{member.user.studentNumber} · {member.user.grade}학년 {member.user.classNumber}반</div></div>
+        <div className="grow"><div className="k">{member.user.name}</div><div className="sub">{member.user.studentNumber} · {member.user.grade}학년 {member.user.classNumber}반</div><div className="sub">체력 {fitnessGradeLabel(member.user.fitnessGrade)}</div></div>
         <div className="ch-chip-stack"><ModeChip mode={member.mode} /><StatusChip status={member.status} /></div>
       </div>)}</div> : <p className="fs13 muted mt12">아직 참여자가 없어요.</p>}
     </>}

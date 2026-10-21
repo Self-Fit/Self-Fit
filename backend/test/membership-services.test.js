@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { acceptOnlyInvitation, listMembers, membershipDto, membershipSelf, previewMembers, selectStudents } from '../src/memberships.js';
 import { koreanDate } from '../src/domain/index.js';
+import { parseFilters } from '../src/filters.js';
 
 const fixture = JSON.parse(await readFile(new URL('../../docs/challenges/fixtures/members.json', import.meta.url), 'utf8'));
 const addedFixture = JSON.parse(await readFile(new URL('../../docs/challenges/fixtures/members-add-response.json', import.meta.url), 'utf8'));
@@ -32,6 +33,8 @@ test('student selection rejects ambiguous, malformed, unsupported and oversized 
     { filters: null }, { filters: [] }, { filters: { grade: true } }, { filters: { grade: '' } },
     { filters: { grade: 0 } }, { filters: { classNumber: 1.5 } }, { filters: { targetType: '' } },
     { filters: { targetType: 'everyone' } }, { filters: { search: 'any' } }, { filters: { participating: true } },
+    { filters: { fitnessGrade: 4 } }, { filters: { fitnessGrades: [] } }, { filters: { fitnessGrades: ['4'] } },
+    { filters: { fitnessGrades: [null] } }, { filters: { fitnessGrades: [0, 6] } }, { filters: { fitnessGrades: [4.5] } },
     { studentIds: ['a'.repeat(100_000)] },
   ];
   for (const selection of invalid) await assert.rejects(selectStudents({}, selection), { status: 400, code: 'INVALID_SELECTION' });
@@ -52,7 +55,20 @@ test('filter selection is restricted to students and accepts an explicit empty f
   const db = { user: { findMany: async input => { reads.push(input); return []; } } };
   await selectStudents(db, { filters: {} });
   await selectStudents(db, { filters: { grade: '2', classNumber: 3, targetType: 'required' } });
-  assert.deepEqual(reads.map(query => query.where), [{ role: 'student' }, { role: 'student', grade: 2, classNumber: 3, targetType: 'required' }]);
+  await selectStudents(db, { filters: { grade: 3, classNumber: 2, fitnessGrades: [5, 4, 4] } });
+  assert.deepEqual(reads.map(query => query.where), [
+    { role: 'student' }, { role: 'student', grade: 2, classNumber: 3, targetType: 'required' },
+    { role: 'student', grade: 3, classNumber: 2, fitnessGrade: { in: [4, 5] } },
+  ]);
+});
+
+test('singular fitness query filters remain separate from school grades and reject coercible malformed values', () => {
+  assert.deepEqual(parseFilters({ grade: '2', classNumber: '3', fitnessGrade: '4' }), { grade: 2, classNumber: 3, fitnessGrade: 4 });
+  assert.deepEqual(parseFilters({ fitnessGrade: 'unmeasured' }), { fitnessGrade: 'unmeasured' });
+  assert.deepEqual(parseFilters({}), {});
+  for (const fitnessGrade of [null, [], ['4'], {}, true, false, NaN, Infinity, 0, 6, 4.5, '04', ' 4', '4,5', 'unmeasured ']) {
+    assert.throws(() => parseFilters({ fitnessGrade }), { status: 400, code: 'INVALID_FILTER' });
+  }
 });
 
 test('preview is read-only, excludes invalid candidates and reports challenge-specific membership without global user mutation', async () => {

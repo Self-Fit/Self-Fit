@@ -13,6 +13,7 @@ import { PrismaClient } from '@prisma/client';
 import ExcelJS from 'exceljs';
 import { runMembershipApiCases } from './membership-api-cases.js';
 import { runChallengeApiCases } from './challenge-api-cases.js';
+import { runFitnessApiCases } from './fitness-api-cases.js';
 import { createApp } from '../src/app.js';
 import { hashPassword } from '../src/password.js';
 import { createReminderEvents,deliverPendingPush } from '../src/notifications.js';
@@ -354,6 +355,7 @@ test('isolated PostgreSQL API integration', {skip:!process.env.TEST_DATABASE_URL
     });
     await runChallengeApiCases(t,{db,request,teacherCookie,a,b,aCookie,bCookie,origin,temp});
     await runMembershipApiCases(t,{db,request,teacherCookie,a,b,aCookie,bCookie,origin,temp});
+    await runFitnessApiCases(t,{db,request,teacherCookie,aCookie});
   } finally {
     if(server) await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});
     const cleanup=[];

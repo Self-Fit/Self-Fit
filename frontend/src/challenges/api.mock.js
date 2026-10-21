@@ -16,6 +16,7 @@ import studentFixture from '../../../docs/challenges/fixtures/student-challenges
 import { addDays, isDate, normalizeWeek, shiftWeeks, validateChallenge } from './validate.js';
 import { legacyWeeks } from './mock-legacy.js';
 import { ME, TEACHER, roster } from './mock-people.js';
+import { matchesMemberFilters as matches, validFitnessSelection } from './member-selection.js';
 
 const FIXTURE_TODAY = listFixture.challenges[0].today;
 const LEGACY = 'c2026-legacy';
@@ -216,15 +217,10 @@ const self = member => ({ mode: member.mode, status: member.status, invitedAt: m
 const memberDto = member => structuredClone({ id: member.id, challengeId: member.challengeId, user: { ...userOf(member.userId), participating: member.status === 'active' }, ...self(member), invitedBy: member.invitedById === TEACHER.id ? TEACHER : member.invitedById ? { id: member.invitedById, name: '교사' } : null });
 const membershipOf = (challengeId, userId) => state.memberships.find(member => member.challengeId === challengeId && member.userId === userId);
 const list = value => Array.isArray(value) ? value : String(value ?? '').split(',').map(item => item.trim()).filter(Boolean);
-function matches(user, filters = {}) {
-  if (filters.grade !== undefined && filters.grade !== '' && String(user.grade) !== String(filters.grade)) return false;
-  if (filters.classNumber !== undefined && filters.classNumber !== '' && String(user.classNumber) !== String(filters.classNumber)) return false;
-  if (filters.targetType && user.targetType !== filters.targetType) return false;
-  return true;
-}
 function selection({ studentIds, filters } = {}) {
   const byIds = Array.isArray(studentIds) && studentIds.length > 0, byFilters = !!filters && typeof filters === 'object' && !Array.isArray(filters);
   if (byIds === byFilters) fail('INVALID_SELECTION', 400);
+  if (byFilters && !validFitnessSelection(filters)) fail('INVALID_SELECTION', 400);
   return byIds ? { ids: [...new Set(studentIds)] } : { users: roster.filter(user => matches(user, filters)) };
 }
 
