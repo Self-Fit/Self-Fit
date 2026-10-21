@@ -64,6 +64,7 @@ test('challenge level rules', () => {
   assert.deepEqual(paths(validateChallenge({ ...input, startDate: '2027-02-30' })), ['startDate', 'enrollmentDeadline'], 'no start means no default deadline (same as the server)');
   assert.deepEqual(paths(validateChallenge({ ...input, enrollmentDeadline: '2027-03-15' })), ['enrollmentDeadline']);
   assert.deepEqual(validateChallenge({ ...input, enrollmentDeadline: '2027-03-14' }), [], 'deadline may be as late as endDate');
+  assert.deepEqual(paths(validateChallenge({ ...input, enrollmentDeadline: '0000-12-31' })), ['enrollmentDeadline'], 'no year 0 (PostgreSQL)');
   assert.deepEqual(paths(validateChallenge({ ...input, endDate: '2027-03-10' })), ['weeks[1].endDate']);
   assert.deepEqual(paths(validateChallenge({ ...input, endDate: '2028-03-01' })), ['endDate'], 'at most 365 days');
   assert.deepEqual(paths(validateChallenge({ ...input, weeks: [] })), ['endDate', 'weeks'], 'no weeks means no default end date');
@@ -82,7 +83,8 @@ test('input type rules', () => {
   assert.deepEqual(week({ inputType: 'check', weeklyTarget: 5, dailyTarget: null, dailyUnit: null }), []);
   assert.deepEqual(week({ inputType: 'count', weeklyTarget: 1.5, unit: '회' }), ['weeks[0].weeklyTarget']);
   assert.deepEqual(week({ inputType: 'count', weeklyTarget: 100, dailyTarget: 2.5, unit: '회' }), ['weeks[0].dailyTarget']);
-  assert.deepEqual(week({ inputType: 'count', weeklyTarget: 100, dailyTarget: 0, unit: '회' }), [], 'count daily target only needs to be an integer');
+  assert.deepEqual(week({ inputType: 'count', weeklyTarget: 100, dailyTarget: 0, unit: '회' }), ['weeks[0].dailyTarget'], 'students read it: positive or empty');
+  assert.deepEqual(week({ inputType: 'check', weeklyTarget: 5, dailyTarget: -5 }), ['weeks[0].dailyTarget']);
   assert.deepEqual(week({ inputType: 'count', weeklyTarget: 100, unit: '' }), ['weeks[0].unit']);
   assert.deepEqual(week({ inputType: 'distance', weeklyTarget: 0, unit: 'km' }), ['weeks[0].weeklyTarget']);
   assert.deepEqual(week({ inputType: 'distance', weeklyTarget: 2.5, dailyTarget: 0.5, unit: 'km' }), []);

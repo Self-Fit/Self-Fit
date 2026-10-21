@@ -37,8 +37,9 @@ const koreaFormatter = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
 });
 
-function isDateString(date) {
-  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+// Year 0000 is rejected: PostgreSQL has no year 0 and the challenge CHECK constraints cast these strings to date.
+export function isDateString(date) {
+  if (typeof date !== 'string' || !/^(?!0000)\d{4}-\d{2}-\d{2}$/.test(date)) return false;
   const parsed = new Date(`${date}T00:00:00.000Z`);
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
 }
@@ -411,10 +412,11 @@ export function validateWeeks(challengeInput) {
       if (!finite(week.weeklyTarget) || week.weeklyTarget <= 0) add(`${path}.weeklyTarget`, '주간 목표 거리는 0보다 커야 해요.');
     }
     const dailyTarget = week.dailyTarget ?? null;
-    if (week.inputType === 'check' && dailyTarget !== null && !finite(dailyTarget)) add(`${path}.dailyTarget`, '일일 목표는 숫자 또는 빈 값이어야 해요.');
-    if (week.inputType === 'count' && dailyTarget !== null && !integer(dailyTarget)) add(`${path}.dailyTarget`, '일일 목표 횟수는 정수 또는 빈 값이어야 해요.');
+    // A daily target is shown to students ("오늘 5분 플랭크"), so zero or negative values are rejected.
+    if (week.inputType === 'check' && dailyTarget !== null && (!finite(dailyTarget) || dailyTarget <= 0)) add(`${path}.dailyTarget`, '일일 목표는 0보다 큰 숫자 또는 빈 값이어야 해요.');
+    if (week.inputType === 'count' && dailyTarget !== null && (!integer(dailyTarget) || dailyTarget < 1)) add(`${path}.dailyTarget`, '일일 목표 횟수는 1 이상의 정수 또는 빈 값이어야 해요.');
     if (week.inputType === 'distance' && dailyTarget !== null && (!finite(dailyTarget) || dailyTarget <= 0)) add(`${path}.dailyTarget`, '일일 목표 거리는 0보다 큰 숫자 또는 빈 값이어야 해요.');
-    if (week.inputType === 'dumbbell' && dailyTarget !== null && !finite(dailyTarget)) add(`${path}.dailyTarget`, '일일 목표는 숫자 또는 빈 값이어야 해요.');
+    if (week.inputType === 'dumbbell' && dailyTarget !== null && (!finite(dailyTarget) || dailyTarget <= 0)) add(`${path}.dailyTarget`, '일일 목표는 0보다 큰 숫자 또는 빈 값이어야 해요.');
     if (['walking', 'check'].includes(week.inputType)) {
       if (week.unit !== '일') add(`${path}.unit`, '일 단위 운동의 주간 단위는 일이어야 해요.');
     } else if (typeof week.unit !== 'string' || !week.unit.trim()) add(`${path}.unit`, '운동 단위를 입력해 주세요.');

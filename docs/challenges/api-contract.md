@@ -41,10 +41,10 @@ MembershipSelf = { mode, status, invitedAt, respondedAt }
 - `weeks` 1–20개. 각 주차는 `startDate <= endDate`, 챌린지 기간 안, 배열 순서대로 날짜가 오름차순이고 **겹치지 않음**(주차 사이 빈 날짜는 휴식).
 - `inputType`별:
   - `walking`: `weeklyTarget` 1–7(일), `dailyTarget` 무시(null로 저장), `unit`='일'. 구간 값(0–5)은 기존 규칙 그대로.
-  - `check`: `weeklyTarget` 1–7(일), `dailyTarget` 숫자|null(설명용), `dailyUnit` 선택, `unit`='일'.
-  - `count`: `weeklyTarget` 정수 ≥1, `dailyTarget` 정수|null, `unit` 필수(예 '회').
+  - `check`: `weeklyTarget` 1–7(일), `dailyTarget` >0|null(설명용), `dailyUnit` 선택, `unit`='일'.
+  - `count`: `weeklyTarget` 정수 ≥1, `dailyTarget` 정수 ≥1|null, `unit` 필수(예 '회').
   - `distance`: `weeklyTarget` > 0, `dailyTarget` >0|null, `unit` 필수(예 'km').
-  - `dumbbell`: `weeklyTarget` 1–7(일), `exercises` 1–5개, `id`는 `^[A-Z0-9_]{2,20}$`이며 챌린지 안에서 유일, `repetitions`·`targetSets` 정수 ≥1.
+  - `dumbbell`: `weeklyTarget` 1–7(일), `dailyTarget` >0|null, `exercises` 1–5개, `id`는 `^[A-Z0-9_]{2,20}$`이며 챌린지 안에서 유일, `repetitions`·`targetSets` 정수 ≥1.
 - `color`는 `#RRGGBB`.
 - 기록 값 검증(`validateValue`)과 완료 판정은 기존 도메인 규칙을 주차 정의에 따라 적용한다.
 
@@ -109,7 +109,7 @@ MembershipSelf = { mode, status, invitedAt, respondedAt }
 | `CHALLENGE_NOT_FOUND` | 404 | 없는 챌린지, 또는 학생이 draft를 조회 |
 | `INVALID_CHALLENGE` | 400 | 검증 실패. `details:[{path:'weeks[2].endDate', message}]` |
 | `CHALLENGE_LOCKED` | 409 | 시작 후 주차/날짜 수정 |
-| `CHALLENGE_NOT_DRAFT` / `ALREADY_PUBLISHED` / `CHALLENGE_NOT_PUBLISHED` / `CHALLENGE_ARCHIVED` | 409 | 상태 전이 위반. 학생이 보관 챌린지의 기록·정정·첨부를 바꾸려 할 때도 `CHALLENGE_ARCHIVED`(읽기는 허용) |
+| `CHALLENGE_NOT_DRAFT` / `ALREADY_PUBLISHED` / `CHALLENGE_NOT_PUBLISHED` / `CHALLENGE_ARCHIVED` | 409 | 상태 전이 위반. 학생이 보관 챌린지의 기록·정정·첨부를 바꾸려 할 때, 교사가 보관 챌린지 기록의 정정 요청을 승인하려 할 때도 `CHALLENGE_ARCHIVED`(읽기와 반려는 허용) |
 | `INVALID_SELECTION` | 400 | `studentIds`도 `filters`도 없거나 둘 다 있음, 100,000자 초과 |
 | `ENROLLMENT_CLOSED` | 409 | 초대 마감/종료 후 등록 시도 |
 | `INVITATION_CLOSED` | 409 | 학생이 마감 후 수락 |

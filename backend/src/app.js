@@ -31,6 +31,8 @@ export async function createApp(db,options={}) {
     res.set('Cache-Control','no-store');next();
   });
   app.use(express.json({limit:'128kb'}));app.use(cookieParser());
+  // PostgreSQL text cannot hold U+0000: refuse it here instead of failing inside a query with a 500.
+  app.use((req,res,next)=>{if(/%00/i.test(req.originalUrl)||(req.body&&JSON.stringify(req.body).includes('\\u0000')))fail(400,'INVALID_INPUT','요청에 사용할 수 없는 문자가 있어요.');next();});
   app.get('/api/health',async(req,res)=>{
     try {await db.$queryRaw`SELECT 1`;res.json({status:'ok',database:'ready'});}
     catch {res.status(503).json({status:'unavailable',database:'unavailable',error:{code:'DATABASE_UNAVAILABLE',message:'데이터베이스 연결을 확인해 주세요.'}});}

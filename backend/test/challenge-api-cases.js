@@ -96,6 +96,17 @@ export async function runChallengeApiCases(t, { db, request, teacherCookie, a, b
       assert.ok(response.data.error.details.some(detail => detail.path.includes('weeks')));
       assert.match(response.headers.get('content-type'), /application\/json/);
       assert.equal((await teacher('/teacher/challenges?lifecycle=unknown')).status, 400);
+      // Values PostgreSQL cannot store are 400s, not 500s: U+0000 anywhere, and year 0 dates (CHECK casts to date).
+      for (const response of [await teacher('/teacher/challenges/%00'), await teacher('/teacher/students?search=%00'), await teacher('/teacher/students/%E0%A4%A'),
+        await teacher('/teacher/challenges', { method: 'POST', body: { ...makeInput(), title: 'a\u0000b' } })]) {
+        assert.deepEqual([response.status, response.data.error.code], [400, 'INVALID_INPUT']);
+      }
+      const yearZero = await teacher('/teacher/challenges', { method: 'POST', body: { ...makeInput(), enrollmentDeadline: '0000-12-31' } });
+      assert.deepEqual([yearZero.status, yearZero.data.error.details.map(detail => detail.path)], [400, ['enrollmentDeadline']]);
+      const source = await create(makeInput());
+      const intoYearOne = await teacher(`/teacher/challenges/${source.id}/duplicate`, { method: 'POST', body: { startDate: '0001-01-01' } });
+      assert.deepEqual([intoYearOne.status, intoYearOne.data.error.code], [400, 'INVALID_CHALLENGE'], 'its default deadline would be 0000-12-31');
+      assert.equal((await request('/student/records/0000-01-01', { cookie: aCookie })).data.error.code, 'INVALID_DATE');
     });
 
     await t.test('draft CRUD matches fixtures, has no participation, preserves gaps on reuse and permits draft-source deletion', async () => {
@@ -193,11 +204,18 @@ export async function runChallengeApiCases(t, { db, request, teacherCookie, a, b
           assert.equal(locked.data.error.code, 'CHALLENGE_LOCKED');
         }
         assert.equal((await teacher(`/teacher/challenges/${challenge.id}`, { method: 'DELETE' })).data.error.code, 'CHALLENGE_NOT_DRAFT');
+        t.mock.timers.setTime(new Date('2026-06-09T01:00:00Z').getTime());
+        const pending = await request(`/student/challenges/${challenge.id}/records/2026-06-08/corrections`, { cookie: aCookie, method: 'POST', body: { value: 12, reason: '보관 전에 낸 정정', version: saved.data.record.version } });
+        assert.equal(pending.status, 201, JSON.stringify(pending.data));
         const archived = await teacher(`/teacher/challenges/${challenge.id}/archive`, { method: 'POST', body: {} });
         assert.equal(archived.status, 200);
         assert.equal(archived.data.challenge.lifecycle, 'archived');
         assert.equal(archived.data.challenge.phase, 'archived');
         assert.equal((await teacher(`/teacher/challenges/${challenge.id}`, { method: 'PATCH', body: { title: '보관 후 수정 시도' } })).data.error.code, 'CHALLENGE_ARCHIVED');
+        // A correction still pending at archive time can only be rejected: approving would change frozen records.
+        assert.equal((await teacher(`/teacher/corrections/${pending.data.correction.id}/approve`, { method: 'POST', body: {} })).data.error.code, 'CHALLENGE_ARCHIVED');
+        assert.equal((await db.dailyRecord.findFirst({ where: { challengeId: challenge.id, userId: a.id } })).value, 10);
+        assert.equal((await teacher(`/teacher/corrections/${pending.data.correction.id}/reject`, { method: 'POST', body: { reason: '보관된 챌린지예요.' } })).status, 200);
         assert.equal((await teacher(`/teacher/challenges/${challenge.id}/publish`, { method: 'POST', body: {} })).status, 409);
         assert.equal((await teacher(`/teacher/challenges/${challenge.id}`, { method: 'DELETE' })).data.error.code, 'CHALLENGE_NOT_DRAFT');
         assert.equal((await request('/student/dashboard', { cookie: aCookie })).data.program.challengeId, legacyId);
@@ -299,6 +317,7 @@ export async function runChallengeApiCases(t, { db, request, teacherCookie, a, b
     });
   } finally {
     const challengeId = { in: [...created] };
+    await db.correction.deleteMany({ where: { record: { challengeId } } });
     await db.dailyRecord.deleteMany({ where: { challengeId } });
     await db.challengeMembership.deleteMany({ where: { challengeId } });
     await db.challenge.deleteMany({ where: { id: { in: [...created] } } });

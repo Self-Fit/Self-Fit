@@ -122,6 +122,7 @@ export function teacherRouter(db) {
       if(!correction) fail(404,'NOT_FOUND','정정 요청을 찾을 수 없습니다.');
       if(correction.status!=='pending') fail(409,'ALREADY_DECIDED','이미 처리된 정정 요청입니다.');
       const challenge=await loadChallenge(tx,correction.record.challengeId);
+      if(challenge.lifecycle==='archived') fail(409,'CHALLENGE_ARCHIVED','보관된 챌린지의 기록은 바꿀 수 없어요. 정정 요청은 반려만 할 수 있어요.');
       checkValue(challenge,correction.record.date,correction.requestedValue);
       await checkProspectiveTotals(tx,challenge,correction.requesterId,correction.record.date,correction.requestedValue);
       const updated=await tx.dailyRecord.updateMany({where:{id:correction.recordId,version:correction.baseVersion},data:{value:correction.requestedValue,version:{increment:1}}});

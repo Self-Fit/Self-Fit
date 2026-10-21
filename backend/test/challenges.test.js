@@ -37,7 +37,7 @@ test('challenge title, description, dates and deadline reject malformed, missing
     description: ['a'.repeat(501), null, 123],
     startDate: ['2027-02-29', '2027-3-02', '', null, 20270302, '2027-03-02T00:00:00Z'],
     endDate: ['2027-02-29', '2027-03-01', null],
-    enrollmentDeadline: ['2027-03-21', '2027-02-30', null],
+    enrollmentDeadline: ['2027-03-21', '2027-02-30', null, '0000-12-31'],
   })) for (const value of values) invalidAt({ ...input(), [key]: value }, key);
   assert.equal(validateWeeks({ ...input(), enrollmentDeadline: '2027-03-20' }).valid, true);
   assert.equal(validateWeeks({ ...input(), enrollmentDeadline: '2020-01-01' }).valid, true);
@@ -107,11 +107,12 @@ test('walking, check and dumbbell targets count whole days from one through seve
       assert.equal(validateWeeks(challenge).valid, true);
     }
   }
-  for (const dailyTarget of [null, -1.5, 0, 2.5]) {
+  for (const dailyTarget of [null, 0.5, 2.5]) {
     const challenge = input(); Object.assign(challenge.weeks[0], { inputType: 'check', dailyTarget });
     assert.equal(validateWeeks(challenge).valid, true);
   }
-  for (const dailyTarget of [NaN, Infinity, '2', false]) {
+  // Students read the daily target ("오늘 5분 플랭크 했나요?"), so it is positive or empty.
+  for (const dailyTarget of [NaN, Infinity, '2', false, 0, -1.5]) {
     const challenge = input(); Object.assign(challenge.weeks[0], { inputType: 'check', dailyTarget });
     invalidAt(challenge, 'weeks[0].dailyTarget');
   }
@@ -122,11 +123,11 @@ test('count targets require integers and distance targets require finite positiv
     const challenge = input(); challenge.weeks[1].weeklyTarget = weeklyTarget;
     invalidAt(challenge, 'weeks[1].weeklyTarget');
   }
-  for (const dailyTarget of [0.5, Infinity, '10', Number.MAX_SAFE_INTEGER + 1]) {
+  for (const dailyTarget of [0.5, Infinity, '10', Number.MAX_SAFE_INTEGER + 1, 0, -1]) {
     const challenge = input(); challenge.weeks[1].dailyTarget = dailyTarget;
     invalidAt(challenge, 'weeks[1].dailyTarget');
   }
-  for (const dailyTarget of [null, -1, 0, 1]) {
+  for (const dailyTarget of [null, 1]) {
     const challenge = input(); challenge.weeks[1].dailyTarget = dailyTarget;
     assert.equal(validateWeeks(challenge).valid, true);
   }

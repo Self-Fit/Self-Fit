@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { Prisma } from '@prisma/client';
 import { requireRole } from './auth.js';
 import { fail } from './errors.js';
-import { activityDates, challengePhase, koreanDate, shiftWeeks, validateWeeks } from './domain/index.js';
+import { activityDates, challengePhase, isDateString as validDate, koreanDate, shiftWeeks, validateWeeks } from './domain/index.js';
 import { addMembers, listMembers, previewMembers, removeMember } from './memberships.js';
 
 const includeWeeks = { weeks: { orderBy: { week: 'asc' } } };
@@ -12,9 +12,6 @@ const weekFields = ['title', 'startDate', 'endDate', 'inputType', 'weeklyTarget'
 const cosmeticFields = ['title', 'description', 'color'];
 const emptyCounts = () => ({ active: 0, pending: 0, declined: 0, forced: 0, invited: 0 });
 const invalid = (path, message) => fail(400, 'INVALID_CHALLENGE', '챌린지 설정을 확인해 주세요.', [{ path, message }]);
-const validDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
-  && Number.isFinite(Date.parse(`${value}T00:00:00.000Z`))
-  && new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value;
 
 function bodyFields(input, allowed) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) invalid('', '요청은 객체로 입력해 주세요.');

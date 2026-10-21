@@ -26,6 +26,10 @@ export function navigate(path, replace = false) {
   window.dispatchEvent(new PopStateEvent('popstate'));
   window.scrollTo(0, 0);
 }
+/** decodeURIComponent for an address segment; a malformed one (`%E0%A4%A`) stays as typed instead of crashing the render. */
+export function decodeSegment(value) {
+  try { return decodeURIComponent(value); } catch { return value; }
+}
 export function useLocation() {
   const [location, setLocation] = useState(() => window.location.pathname + window.location.search);
   useEffect(() => { const update = () => setLocation(window.location.pathname + window.location.search); window.addEventListener('popstate', update); return () => window.removeEventListener('popstate', update); }, []);

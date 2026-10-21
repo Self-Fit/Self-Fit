@@ -17,7 +17,7 @@ export const MESSAGES = {
 
 const DAY = 86_400_000;
 export function isDate(value) {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  if (typeof value !== 'string' || !/^(?!0000)\d{4}-\d{2}-\d{2}$/.test(value)) return false; // no year 0, like the server
   const parsed = new Date(`${value}T00:00:00Z`);
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
@@ -96,8 +96,8 @@ export function validateChallenge(input) {
       if (!finite(week.weeklyTarget) || week.weeklyTarget <= 0) add(`${path}.weeklyTarget`, '주간 목표 거리는 0보다 커야 해요.');
     }
     const daily = week.dailyTarget ?? null;
-    if ((week.inputType === 'check' || week.inputType === 'dumbbell') && daily !== null && !finite(daily)) add(`${path}.dailyTarget`, '일일 목표는 숫자 또는 빈 값이어야 해요.');
-    if (week.inputType === 'count' && daily !== null && !integer(daily)) add(`${path}.dailyTarget`, '일일 목표 횟수는 정수 또는 빈 값이어야 해요.');
+    if ((week.inputType === 'check' || week.inputType === 'dumbbell') && daily !== null && (!finite(daily) || daily <= 0)) add(`${path}.dailyTarget`, '일일 목표는 0보다 큰 숫자 또는 빈 값이어야 해요.');
+    if (week.inputType === 'count' && daily !== null && (!integer(daily) || daily < 1)) add(`${path}.dailyTarget`, '일일 목표 횟수는 1 이상의 정수 또는 빈 값이어야 해요.');
     if (week.inputType === 'distance' && daily !== null && (!finite(daily) || daily <= 0)) add(`${path}.dailyTarget`, '일일 목표 거리는 0보다 큰 숫자 또는 빈 값이어야 해요.');
     if (week.inputType === 'walking' || week.inputType === 'check') {
       if (week.unit !== DAY_UNIT) add(`${path}.unit`, '일 단위 운동의 주간 단위는 일이어야 해요.');
