@@ -15,6 +15,13 @@ export function navigate(path, replace = false) {
 export function decodeSegment(value) {
   try { return decodeURIComponent(value); } catch { return value; }
 }
+/** Below this width the mobile templates are used, at or above it the web ones. */
+const MOBILE_QUERY = '(max-width: 1023px)';
+export function useViewportMode() {
+  const [mode, setMode] = useState(() => window.matchMedia(MOBILE_QUERY).matches ? 'mobile' : 'web');
+  useEffect(() => { const media = window.matchMedia(MOBILE_QUERY); const update = () => setMode(media.matches ? 'mobile' : 'web'); update(); media.addEventListener('change', update); return () => media.removeEventListener('change', update); }, []);
+  return mode;
+}
 export function useLocation() {
   const [location, setLocation] = useState(() => window.location.pathname + window.location.search);
   useEffect(() => { const update = () => setLocation(window.location.pathname + window.location.search); window.addEventListener('popstate', update); return () => window.removeEventListener('popstate', update); }, []);

@@ -3,10 +3,24 @@
 /* Runtime framing only. Component geometry comes from the original design.css. */
 body{background:var(--bg)}
 #root{min-height:100vh}
-.browser.app-frame{width:1438px;max-width:none;border:0;border-radius:0;box-shadow:none;margin:0 auto;overflow:visible}
-.browser.app-frame>.view{min-height:860px}
-.mobile-app{width:370px;margin:0 auto;background:var(--bg)}
-.mobile-app>.screen{height:752px;border-radius:0}
+.browser.app-frame{width:100%;max-width:none;border:0;border-radius:0;box-shadow:none;margin:0 auto;overflow:visible}
+.browser.app-frame>.view{min-height:100vh}
+.mobile-app{width:100%;margin:0 auto;background:var(--bg)}
+.mobile-app>.screen{height:100vh;height:100dvh;border-radius:0}
+/* /design keeps the drawn frame sizes so templates can be compared with the originals. */
+.design-preview .browser.app-frame{width:1438px}
+.design-preview .browser.app-frame>.view{min-height:860px}
+.design-preview .mobile-app{width:370px}
+.design-preview .mobile-app>.screen{height:752px}
+/* The web header was drawn at 1440px; narrower windows keep every menu on one line and let the challenge selector shrink instead. */
+.w-hd>.w-brand,.w-hd>.icon-btn,.w-hd>.w-user{flex-shrink:0}
+.w-hd>.w-nav{min-width:max-content}
+.w-nav a,.w-user{white-space:nowrap}
+@media (max-width:1279px){
+  .w-hd{padding:0 20px;gap:16px}
+  .w-hd>.w-brand>div{display:none}
+  .w-nav a{padding:0 12px}
+}
 .brand-original{display:inline-flex;align-items:center;gap:6px;width:132px;height:36px;flex-shrink:0;vertical-align:middle}
 .w-brand .brand-original,.m-hd .brand-original,.auth .brand-original{display:inline-flex}
 .brand-original>span{position:relative;display:block;overflow:hidden;flex-shrink:0}
