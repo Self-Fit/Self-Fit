@@ -1,0 +1,61 @@
+{
+	# IP 주소로 접속하면 클라이언트가 SNI를 보내지 않으므로 IP 인증서를 내준다.
+	default_sni 3.38.183.142
+
+	servers {
+		# self-fit.choies.kr은 Cloudflare 프록시를 거친다(https://www.cloudflare.com/ips/, 2026-10-27 기준).
+		# 이 대역에서 온 요청만 CF-Connecting-IP로 실제 접속 주소를 정할 수 있다.
+		trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+		client_ip_headers CF-Connecting-IP
+	}
+}
+
+# Self-Fit: 정적 프런트엔드 + /api 리버스 프록시.
+# Cloudflare를 거치면 TLS-ALPN 검증이 닿지 않으므로 인증서는 80번 포트의 HTTP-01로 받는다.
+https://self-fit.choies.kr {
+	tls {
+		issuer acme {
+			disable_tlsalpn_challenge
+		}
+	}
+
+	encode zstd gzip
+	header -Server
+
+	handle /api/* {
+		# API의 로그인 제한이 실제 접속 주소를 보도록 한 개의 주소만 넘긴다(TRUST_PROXY=loopback).
+		reverse_proxy 127.0.0.1:4000 {
+			header_up X-Forwarded-For {client_ip}
+		}
+	}
+
+	handle {
+		root * /srv/self-fit/www
+		@hashed path /assets/*
+		header @hashed Cache-Control "public, max-age=31536000, immutable"
+		@unhashed not path /assets/*
+		header @unhashed Cache-Control "no-cache"
+		header X-Content-Type-Options nosniff
+		header Referrer-Policy same-origin
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output file /var/log/caddy/self-fit.log {
+			roll_size 20MiB
+			roll_keep 5
+		}
+	}
+}
+
+# IP 주소 접속은 자체 단기 인증서(443 TLS-ALPN)로 받아 도메인으로 보내기만 한다.
+https://3.38.183.142 {
+	tls {
+		issuer acme {
+			profile shortlived
+			disable_http_challenge
+		}
+	}
+	redir https://self-fit.choies.kr{uri} 308
+}

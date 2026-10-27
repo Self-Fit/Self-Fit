@@ -1,0 +1,32 @@
+[Unit]
+Description=Self-Fit API (Express + Prisma)
+Documentation=file:///opt/self-fit/app/backend/README.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=selffit
+Group=selffit
+WorkingDirectory=/opt/self-fit/app/backend
+ExecStart=/usr/bin/node --env-file=/opt/self-fit/app/backend/.env src/server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/self-fit/attachments
+
+[Install]
+WantedBy=multi-user.target

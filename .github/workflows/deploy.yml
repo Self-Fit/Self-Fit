@@ -1,0 +1,90 @@
+# main에 push하면 테스트·빌드를 통과한 커밋만 운영 서버(https://self-fit.choies.kr)에 배포한다.
+# 서버 쪽 동작은 deploy/server/self-fit-deploy, 처음 설정과 수동 배포는 deploy/README.md 참고.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: 테스트·빌드
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: self_fit
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: self_fit_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U self_fit -d self_fit_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      # 이 작업 안에서만 쓰는 일회용 DB. 운영 DB와 무관하다.
+      TEST_DATABASE_URL: postgresql://self_fit:ci-only-password@127.0.0.1:5432/self_fit_test?schema=public
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: 영상 검사 도구 설치
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - run: npm ci
+      - run: npm run db:generate --workspace backend
+      - run: npm test
+      - run: npm run build
+
+  deploy:
+    name: 운영 서버 배포
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://self-fit.choies.kr
+    env:
+      DEPLOY_HOST: 3.38.183.142
+      DEPLOY_USER: selffit-deploy
+      # 서버의 SSH 호스트 키(공개 정보). 서버를 새로 만들면 이 줄도 바꾼다.
+      DEPLOY_KNOWN_HOSTS: 3.38.183.142 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMmf7IZH8/2QEOtAxFdHzW8xYegVKrUg12k35a4isiZb
+    steps:
+      - uses: actions/checkout@v7
+      - name: SSH 키 준비
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          [ -n "$DEPLOY_SSH_KEY" ] || { echo "저장소 시크릿 DEPLOY_SSH_KEY가 없습니다. deploy/README.md를 참고해 등록해 주세요."; exit 1; }
+          install -d -m 700 ~/.ssh
+          (umask 077; printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key)
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: 배포
+        run: |
+          git archive --format=tar "$GITHUB_SHA" \
+            | ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
+                -o ServerAliveInterval=30 "$DEPLOY_USER@$DEPLOY_HOST" "$GITHUB_SHA"
+      - name: 공개 주소 확인
+        run: |
+          for _ in $(seq 1 10); do
+            curl -fsS https://self-fit.choies.kr/api/health | grep -q '"database":"ready"' && exit 0
+            sleep 3
+          done
+          echo "https://self-fit.choies.kr/api/health 응답이 정상이 아닙니다."; exit 1
+      - name: SSH 키 삭제
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

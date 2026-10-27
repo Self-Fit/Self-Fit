@@ -1,0 +1,88 @@
+#!/bin/bash
+# Self-Fit 운영 배포. `git archive` tar를 표준입력으로 받아 새 릴리스를 만들고,
+# 빌드 → DB 백업 → 마이그레이션 → 전환 → 상태 확인 순서로 진행한다. 확인에 실패하면 이전 릴리스로 되돌린다.
+# 서버에는 root 소유 /usr/local/sbin/self-fit-deploy 로 설치하며, 배포 SSH 키는 이 명령만 실행할 수 있다.
+# 저장소의 이 파일을 바꿔도 서버에 자동 반영되지 않는다(deploy/README.md의 설치 절차를 다시 따른다).
+set -euo pipefail
+umask 022
+
+SHA=${1:-}
+[[ $SHA =~ ^[0-9a-f]{40}$ ]] || { echo "사용법: self-fit-deploy <40자리 커밋 SHA> < source.tar" >&2; exit 2; }
+
+BASE=/opt/self-fit
+RELEASES=$BASE/releases
+SHARED_ENV=$BASE/shared/backend.env
+CURRENT=$BASE/app
+WWW=/srv/self-fit/www
+BACKUPS=/var/lib/self-fit/backups
+APP_USER=selffit
+KEEP_RELEASES=3
+KEEP_BACKUPS=10
+
+log() { printf '[deploy %s] %s\n' "$(date -u +%H:%M:%SZ)" "$*"; }
+as_app() { sudo -u "$APP_USER" -H env TMPDIR=/var/tmp "$@"; }
+switch_to() { ln -sfn "$1" "$CURRENT.next" && mv -Tf "$CURRENT.next" "$CURRENT"; }
+healthy() {
+  for _ in $(seq 1 40); do
+    curl -fsS -m 2 http://127.0.0.1:4000/api/health 2>/dev/null | grep -q '"database":"ready"' && return 0
+    sleep 1
+  done
+  return 1
+}
+
+exec 9>/run/lock/self-fit-deploy.lock
+flock -n 9 || { echo "다른 배포가 진행 중입니다." >&2; exit 75; }
+cd /
+
+STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+NEW=$RELEASES/$STAMP-${SHA:0:12}
+PREV=$(readlink -f "$CURRENT" || true)
+BACKUP=
+keep_new=
+trap '[[ -n $keep_new ]] || rm -rf -- "$NEW"' EXIT
+
+log "커밋 $SHA 수신"
+install -d -o "$APP_USER" -g "$APP_USER" -m 0750 "$NEW"
+as_app tar -x -C "$NEW" -f -
+[[ -f $NEW/package.json && -d $NEW/backend/prisma/migrations ]] || { echo "받은 tar에 Self-Fit 소스가 없습니다." >&2; exit 1; }
+echo "$SHA" | as_app tee "$NEW/.deployed-commit" >/dev/null
+as_app ln -s "$SHARED_ENV" "$NEW/backend/.env"
+
+log "의존성 설치·빌드"
+as_app bash -c "cd '$NEW' && npm ci --no-audit --no-fund --loglevel=error"
+as_app bash -c "cd '$NEW' && npm run --silent db:generate --workspace backend >/dev/null"
+as_app bash -c "cd '$NEW' && npm run --silent build"
+
+BACKUP=$BACKUPS/predeploy-$STAMP-${SHA:0:12}.dump
+log "DB 백업 $BACKUP"
+(umask 077; sudo -u postgres pg_dump --format=custom --dbname=self_fit > "$BACKUP.partial")
+mv "$BACKUP.partial" "$BACKUP" && chown "$APP_USER:$APP_USER" "$BACKUP"
+
+log "마이그레이션 적용"
+if ! as_app bash -c "cd '$NEW/backend' && npx --no-install prisma migrate deploy"; then
+  log "마이그레이션 실패. 기존 버전이 계속 실행 중입니다. 배포 전 백업: $BACKUP"
+  exit 1
+fi
+
+log "새 릴리스로 전환 후 재시작"
+switch_to "$NEW"
+systemctl restart self-fit
+if ! healthy; then
+  log "상태 확인 실패. 이전 릴리스로 되돌립니다."
+  journalctl -u self-fit -n 30 --no-pager -o cat || true
+  if [[ -n $PREV && -d $PREV && $PREV != "$NEW" ]]; then switch_to "$PREV"; systemctl restart self-fit; healthy && log "이전 릴리스 복구 완료"; fi
+  log "이미 적용된 마이그레이션은 되돌리지 않았습니다. 배포 전 백업: $BACKUP"
+  exit 1
+fi
+keep_new=1
+
+log "프런트엔드 게시"
+rsync -a --delete --chown=root:root --chmod=D755,F644 "$NEW/frontend/dist/" "$WWW/"
+
+# 릴리스 이름이 시각으로 시작하므로 이름순 = 시간순. 현재·직전 릴리스는 항상 남긴다.
+find "$RELEASES" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -r | tail -n +$((KEEP_RELEASES + 1)) | while read -r old; do
+  [[ $RELEASES/$old == "$NEW" || $RELEASES/$old == "$PREV" ]] || rm -rf -- "${RELEASES:?}/$old"
+done
+find "$BACKUPS" -maxdepth 1 -name 'predeploy-*.dump' -printf '%f\n' | sort -r | tail -n +$((KEEP_BACKUPS + 1)) | while read -r old; do rm -f -- "$BACKUPS/$old"; done
+
+log "배포 완료: $SHA"

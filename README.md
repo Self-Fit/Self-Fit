@@ -96,3 +96,7 @@ node --env-file=backend/.env tests/browser-fixture.mjs
 ## 챌린지 기능 문서
 
 설계와 phase별 작업 문서는 [docs/challenges/README.md](docs/challenges/README.md)에, API 계약은 [docs/challenges/api-contract.md](docs/challenges/api-contract.md)에 있습니다. 에이전트(Codex 등)와 팀원은 루트 [AGENTS.md](AGENTS.md)의 규칙에 따라 맡은 phase 문서를 보고 작업합니다.
+
+## 운영 배포
+
+운영 주소는 https://self-fit.choies.kr 이고, `main`에 push하면 GitHub Actions가 테스트를 통과한 커밋을 자동으로 배포합니다. 서버 구성·처음 설정·되돌리기는 [deploy/README.md](deploy/README.md)를 참고하세요.
