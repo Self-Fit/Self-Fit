@@ -19,4 +19,4 @@ export async function verifyPassword(password, encoded) {
   const actual = await scrypt(password, salt, 64);
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
-export const temporaryPassword = () => randomBytes(12).toString('base64url');
+export const temporaryPassword = () => 'Sf1'+randomBytes(12).toString('base64url');

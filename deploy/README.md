@@ -82,3 +82,9 @@ DB는 자동으로 되돌리지 않아요. 마이그레이션을 되돌려야 �
 ## 배포 스크립트·서버 설정을 바꿀 때
 
 `deploy/server/`의 파일을 고쳐도 서버에는 자동으로 반영되지 않아요. 배포 키가 root 권한으로 실행되는 스크립트 자체를 바꾸지 못하게 하려는 의도예요. 고친 뒤 위 설치 명령으로 서버에 직접 넣어요. Cloudflare가 프록시 IP 대역을 바꾸면 `Caddyfile`의 `trusted_proxies`도 갱신해요.
+
+## 학생 임시 비밀번호 보관 키
+
+학생 비밀번호 관리 버전은 서버 시작 시 환경 변수 `TEMPORARY_PASSWORD_KEY`를 우선 사용해요. 미설정이면 기존 영속 저장소 `/var/lib/self-fit/attachments/.secrets/temporary-password.key`에 32바이트 키를 최초 한 번 생성하고 이후 릴리스에서도 재사용해요. 현재 systemd의 `ReadWritePaths` 안이므로 서비스나 root 배포 스크립트를 바꿀 필요가 없어요. 키 파일은 0600이며 첨부 API에 노출하지 않아요. DB 백업과 별도로 비공개 백업하고, 재배포·롤백·서버 이전 때 같은 키를 유지하세요. GitHub Secrets나 소스 tar에 넣을 필요가 없어요.
+
+기존 DB에 초기 비밀번호 보관본이 없으면 교사가 초기화한 뒤 새 임시 비밀번호를 확인할 수 있어요. 이전 발급 원본이 비공개로 보관돼 있다면 백엔드 README의 `recover-temporary-passwords.js`로 현재 해시와 일치하는 미변경 계정만 연결할 수 있어요. 학생 원본 파일을 Git에 올리지 마세요.

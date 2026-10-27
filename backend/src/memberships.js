@@ -45,15 +45,20 @@ function validateSelection(selection) {
     return { ids: [...new Set(selection.studentIds.map(id => id.trim()))] };
   }
   const filters = selection.filters;
-  if (!object(filters) || Object.keys(filters).some(key => !['grade', 'classNumber', 'targetType'].includes(key))) {
-    selectionError('학년·반·대상 구분 필터만 사용할 수 있어요.');
+  if (!object(filters) || Object.keys(filters).some(key => !['grade', 'classNumber', 'targetType', 'fitnessGrades'].includes(key))) {
+    selectionError('학년·반·대상 구분·체력등급 필터만 사용할 수 있어요.');
   }
   for (const field of ['grade', 'classNumber']) {
     if (Object.hasOwn(filters, field) && !(typeof filters[field] === 'number'
       || (typeof filters[field] === 'string' && /^\d+$/.test(filters[field])))) selectionError('학년과 반은 양의 정수로 입력해 주세요.');
   }
   if (Object.hasOwn(filters, 'targetType') && !['required', 'optional'].includes(filters.targetType)) selectionError('필수 또는 선택 대상을 골라 주세요.');
-  try { return { filters: parseFilters(filters) }; }
+  if (Object.hasOwn(filters, 'fitnessGrades') && (!Array.isArray(filters.fitnessGrades) || !filters.fitnessGrades.length
+    || filters.fitnessGrades.some(grade => !Number.isInteger(grade) || grade < 1 || grade > 5))) selectionError('체력등급은 1~5의 정수 목록으로 하나 이상 선택해 주세요.');
+  try {
+    const { fitnessGrades, ...otherFilters } = filters;
+    return { filters: { ...parseFilters(otherFilters), ...(fitnessGrades ? { fitnessGrade: { in: [...new Set(fitnessGrades)].sort((a,b)=>a-b) } } : {}) } };
+  }
   catch (error) {
     if (error.status !== 400) throw error;
     selectionError('학년·반·대상 구분 필터를 확인해 주세요.');
@@ -115,12 +120,12 @@ export async function previewMembers(db, challengeId, selection) {
 }
 
 function listFilters(query) {
-  if (!object(query) || Object.keys(query).some(key => !['status', 'mode', 'grade', 'classNumber', 'targetType', 'search'].includes(key))) filterError();
-  for (const field of ['grade', 'classNumber', 'targetType', 'search']) {
+  if (!object(query) || Object.keys(query).some(key => !['status', 'mode', 'grade', 'classNumber', 'targetType', 'fitnessGrade', 'search'].includes(key))) filterError();
+  for (const field of ['grade', 'classNumber', 'targetType', 'fitnessGrade', 'search']) {
     if (query[field] !== undefined && !['string', 'number'].includes(typeof query[field])) filterError();
   }
   for (const field of ['targetType', 'search']) if (query[field] !== undefined && typeof query[field] !== 'string') filterError();
-  const cohort = parseFilters(Object.fromEntries(['grade', 'classNumber', 'targetType', 'search']
+  const cohort = parseFilters(Object.fromEntries(['grade', 'classNumber', 'targetType', 'fitnessGrade', 'search']
     .filter(key => query[key] !== undefined).map(key => [key, query[key]])));
   const selectedStatuses = query.status === undefined || query.status === '' ? ['active', 'pending', 'declined']
     : typeof query.status === 'string' ? [...new Set(query.status.split(','))] : [];
@@ -128,6 +133,7 @@ function listFilters(query) {
   if (query.mode !== undefined && query.mode !== '' && !modes.includes(query.mode)) filterError();
   const user = { role: 'student' };
   for (const key of ['grade', 'classNumber', 'targetType']) if (cohort[key] !== undefined) user[key] = cohort[key];
+  if (cohort.fitnessGrade !== undefined) user.fitnessGrade = cohort.fitnessGrade === 'unmeasured' ? null : cohort.fitnessGrade;
   if (cohort.search) user.OR = [{ name: { contains: cohort.search, mode: 'insensitive' } }, { studentNumber: { contains: cohort.search, mode: 'insensitive' } }];
   return { user, status: { in: selectedStatuses }, ...(query.mode ? { mode: query.mode } : {}) };
 }

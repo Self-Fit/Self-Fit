@@ -59,7 +59,7 @@ npm run bootstrap-teacher --workspace backend
 
 자동화가 필요한 경우 `TEACHER_ID`, `TEACHER_NAME`, `TEACHER_PASSWORD` 환경 변수 또는 `studentNumber`, `name`, `password` 필드의 JSON 객체를 표준입력으로 전달할 수 있습니다. 비밀번호를 CLI 인수에 넣지 마세요. 표준입력 JSON은 전달한 필드에 한해 환경 변수보다 우선합니다. 명령 성공 시 비밀번호를 출력하지 않습니다.
 
-학생은 교사 로그인 후 명단 화면에서 실제 명단으로 등록합니다. 엑셀은 먼저 검증하며, 교사가 등록을 실행해야 저장됩니다. 등록·초기화에서 발급한 개인별 임시 비밀번호는 해당 응답에서 한 번만 제공하며 서버는 해시만 저장합니다.
+학생은 교사 로그인 후 명단 화면에서 실제 명단으로 등록합니다. 엑셀은 먼저 검증하며, 교사가 등록을 실행해야 저장됩니다. 등록·초기화한 임시 비밀번호는 학생이 변경하기 전까지 교사가 다시 확인할 수 있도록 암호화해 보관합니다. 학생이 직접 정한 비밀번호는 해시만 저장합니다.
 
 ## 환경 설정
 
@@ -111,6 +111,22 @@ npm run test:integration --workspace backend
 
 통합 테스트는 인증·역할 권한, 첫 비밀번호 변경, 임시 비밀번호 초기화와 세션 폐기, 실제 종료일 제한, 정정 전후 값·이력·낙관적 충돌, 명단 검증/등록, 비공개 첨부·60초 영상 검사, 알림 중복 방지, 엑셀 의미 보존을 확인합니다. 챌린지 회귀는 빈 DB·기존 기록 마이그레이션, 레거시 집계·원본 지문 보존, 같은 날짜의 챌린지별 분리, 강제 등록·초대·수락·거절·재초대·제외, 마감과 동시 요청, active 분모, 알림 두 종류와 푸시 게이트 예외, 공통 픽스처 응답 키를 검증해요. 당일 입력 회귀만 테스트 프로세스의 시계를 가짜 시각으로 제어하며 실제 서버의 날짜 기능을 변경하지 않습니다.
 
+## 학생 체력등급 반영
+
+체력등급은 학년과 별도이며, 명단에는 확인된 가장 최근 학년도의 2학기 등급을 표시합니다. 학생 상세에는 학년도·학기별 이전 평가를 함께 제공합니다. 등급 선택은 챌린지 참여자 미리보기 조건일 뿐이며, 실제 강제 등록은 교사의 확정 동작으로만 실행됩니다. 기존 필수/선택 분류·운동 기록·계정 정보는 유지합니다.
+
+`import-fitness-grades.js`는 연도별 학생명단 파일의 2026년 행을 학번·이름·학년·반으로 정확히 연결합니다. 2025년 자료와 분류용 중복 시트는 원본 보관에만 포함하고 이름이나 진급 추정으로 학생에게 연결하지 않습니다. 원본 전체 시트 값과 해시, 학생별 출처는 비공개 DB에 보관합니다.
+
+```sh
+# 기본은 읽기 전용 검증. --include-existing은 이전에 보존된 2026년 원본으로 누락 학생을 보완합니다.
+node --env-file=backend/.env backend/scripts/import-fitness-grades.js path/to/grades.xlsx --dry-run
+node --env-file=backend/.env backend/scripts/import-fitness-grades.js path/to/grades.xlsx --include-existing --dry-run
+# 반영 범위를 확인하고 DB를 백업한 뒤, 같은 옵션에 --apply로 실행합니다.
+node --env-file=backend/.env backend/scripts/import-fitness-grades.js path/to/grades.xlsx --include-existing --apply
+```
+
+일치하지 않는 학생이나 기존 원본과 충돌하는 평가 값이 있으면 전체 반영을 중단합니다. 같은 파일을 다시 반영해도 평가 이력·원본 행을 중복 생성하지 않습니다. 학생 ID·비밀번호·세션·참여 여부·운동 기록은 갱신하지 않습니다. 새 자료가 없는 학생은 임의의 등급을 지정하지 않고 미등록으로 표시합니다.
+
 ## 확인 대기와 의존성 점검
 
 레거시 2026 챌린지의 12주차 덤벨은 사용자가 승인한 파일 기준을 적용합니다. 8/31~9/4의 각 날짜에 컬·스쿼트·로우 3종목 모두 10회×2세트를 충족하면 완료일이며, 완료일 3일 이상이면 해당 주차 완료입니다. 종목별 세트 수를 JSON으로 보존하고 미입력과 0세트를 구분합니다. 레거시 전체 12주를 모두 완료하면 전체 완료로 판정합니다. 새 챌린지는 자신에게 설정된 주차 수와 운동 목표로 집계하며, 덤벨 종목 ID·세트 목표도 해당 주차 정의를 사용해요. 외부 배포 주소·보관 기간은 사용자가 정한 값을 사용해야 합니다.
@@ -118,3 +134,20 @@ npm run test:integration --workspace backend
 2026-10-20 의존성 점검에서 런타임의 업로드·파일 판별·로그인 속도 제한 관련 보안 수정 버전으로 갱신했습니다. [Express 업로드 보안 공지](https://expressjs.com/en/blog/2026-08-31-security-releases/), [Multer 2.4.0 릴리스](https://github.com/expressjs/multer/releases/tag/v2.4.0)
 
 `npm audit`의 잔여 항목은 숨기지 않습니다. Prisma 6 CLI 개발 의존성의 `deepmerge-ts`/`effect`에는 경고가 있으며 Prisma 7 전환은 별도 호환성 작업입니다. 서비스 요청 경로는 Prisma Client를 사용하고 외부 입력을 CLI 설정 병합이나 Effect RPC로 전달하지 않습니다. ExcelJS의 전이 의존성 `uuid` 경고는 v3/v5/v6의 사용자 지정 버퍼 경로에 관한 것으로, 이 프로젝트와 ExcelJS에서 확인한 호출은 버퍼를 전달하지 않는 v4입니다. 이 범위 확인은 경고가 해결되었다는 뜻이 아니므로 배포 전 다시 점검해야 합니다.
+
+## 교사의 학생 비밀번호 관리
+
+명단과 학생 상세의 **비밀번호 관리**에서 변경 여부, 초기·임시 비밀번호 확인, 비밀번호 초기화를 사용할 수 있어요. 학생이 직접 정한 비밀번호는 확인할 수 없고, 변경 완료 이후에는 보관한 임시 비밀번호를 제거해요. 초기화하면 모든 기존 학생 세션이 종료돼요.
+
+발급한 임시 비밀번호는 AES-256-GCM으로 암호화하며 각 비밀번호 해시에 묶어요. DB에는 암호문만 저장하고 로그인에는 기존 scrypt 해시를 사용해요. 목록·학생 응답에는 암호문이나 비밀번호를 포함하지 않으며, 교사가 확인 버튼을 눌렀을 때만 교사 전용 API에서 반환해요. 응답 캐시와 브라우저 영구 저장소에는 보관하지 않아요.
+
+배포 시 마이그레이션과 `TEMPORARY_PASSWORD_KEY`(32바이트 랜덤 키를 표현한 64자리 hex)가 필요해요. `npm run setup` / `npm run dev`는 키가 없는 로컬 `backend/.env`에 한 번 생성해요. 서버에서는 비밀 환경 변수로 공급하거나, `backend/.env` 준비 후 `node scripts/setup-password-vault.mjs`로 생성하세요. 생성된 키는 DB와 별도로 비공개 백업해야 하며 재배포 때 유지하세요. 키를 바꾸면 이전 임시 비밀번호를 확인할 수 없어요. 키를 Git이나 DB ZIP에 넣지 마세요.
+
+이전 계정은 보관본이 없으면 초기화로 새 비밀번호를 발급할 수 있어요. 기존의 비공개 초기 발급 원본이 있는 경우 아래 도구는 이름·학번과 현재 비밀번호 해시가 일치하며 아직 변경하지 않은 학생만 보완해요. 기존 비밀번호·세션·발급 시각은 바꾸지 않아요.
+
+```sh
+node --env-file=backend/.env backend/scripts/recover-temporary-passwords.js /private/accounts.private.json --dry-run
+node --env-file=backend/.env backend/scripts/recover-temporary-passwords.js /private/accounts.private.json --apply
+```
+
+운영 서버에서 환경 키를 지정하지 않으면 서버 시작 시 `STORAGE_DIR/.secrets/temporary-password.key`에 키를 한 번 생성하고 재사용해요(파일 0600, 디렉터리 0700). 새 릴리스 폴더가 아니라 기존 영속 `STORAGE_DIR` 안에 있으므로 자동 배포·재시작에도 유지돼요. `TEMPORARY_PASSWORD_KEY_FILE`로 별도 영속 파일을 지정할 수도 있어요. 기존 키를 다른 키로 교체하지 말고 비공개로 백업하세요. 이 파일은 첨부 DB 레코드와 연결되지 않아 첨부 조회 API로 받을 수 없어요.

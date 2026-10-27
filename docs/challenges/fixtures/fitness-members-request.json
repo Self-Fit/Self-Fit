@@ -1,0 +1,4 @@
+{
+  "mode": "forced",
+  "filters": { "fitnessGrades": [4, 5] }
+}

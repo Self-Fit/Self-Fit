@@ -126,6 +126,9 @@
 .ch-steps li.on span{background:var(--g);color:#fff}
 .ch-steps li.done span{background:var(--g-soft);color:var(--g-deep)}
 .ch-filter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.ch-grade-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.ch-grade-field{grid-column:1/-1}
+.ch-grade-field .pills{flex-wrap:wrap}
 .ch-search{width:100%}
 .ch-pick-list,.ch-preview-list{max-height:220px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--r-md);background:#fff}
 .ch-pick,.ch-preview{display:grid;grid-template-columns:20px minmax(0,1fr) 56px 76px auto;align-items:center;gap:10px;width:100%;padding:10px 14px;border-bottom:1px solid var(--line);font:inherit;font-size:13px;text-align:left}

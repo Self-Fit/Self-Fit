@@ -1,0 +1,9 @@
+{
+  "fitnessGrade": 3,
+  "fitnessGradeYear": 2026,
+  "fitnessGradeSemester": 2,
+  "fitnessHistory": [
+    { "year": 2026, "semester": 2, "grade": 3, "score": 55 },
+    { "year": 2026, "semester": 1, "grade": 4, "score": 38 }
+  ]
+}

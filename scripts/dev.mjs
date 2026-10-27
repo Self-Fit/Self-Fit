@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const database = spawnSync(process.execPath, ['scripts/db.mjs', 'start'], { cwd: root, stdio: 'inherit' });
 if (database.status !== 0) process.exit(database.status || 1);
+const vault = spawnSync(process.execPath, ['scripts/setup-password-vault.mjs'], { cwd: root, stdio: 'inherit' });
+if (vault.status !== 0) process.exit(vault.status || 1);
 const ownProcessGroups = process.platform !== 'win32';
 const childOptions = { cwd: root, stdio: 'inherit', detached: ownProcessGroups };
 const children = [

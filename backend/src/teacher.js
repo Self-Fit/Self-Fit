@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { Prisma } from '@prisma/client';
 import { fail, isForeignKeyViolation, requiredText } from './errors.js';
 import { userDto, studentSummary, recordDto, correctionDto, programDto, recordsWithAttachments } from './dto.js';
-import { hashPassword, temporaryPassword } from './password.js';
+import { temporaryPassword } from './password.js';
+import { temporaryCredential, passwordStatus, revealTemporaryPassword } from './temporary-passwords.js';
 import { studentFields, rosterRouter } from './roster.js';
 import { summarizeProgram, summarizeWeek,getWeekForDate } from './domain/index.js';
 import { checkValue,checkProspectiveTotals } from './student.js';
@@ -17,6 +18,7 @@ export { parseFilters } from './filters.js';
 export async function filteredStudents(db,query,challenge=null,{records=true}={}) {
   const filters=parseFilters(query),where={role:'student'};
   for(const key of ['grade','classNumber','targetType']) if(filters[key]!==undefined) where[key]=filters[key];
+  if(filters.fitnessGrade!==undefined) where.fitnessGrade=filters.fitnessGrade==='unmeasured'?null:filters.fitnessGrade;
   if(filters.search) where.OR=[{name:{contains:filters.search,mode:'insensitive'}},{studentNumber:{contains:filters.search,mode:'insensitive'}}];
   if(filters.studentIds) where.id={in:filters.studentIds};
   if(challenge && filters.week && !challenge.weeks.some(week=>week.week===filters.week)) fail(400,'INVALID_FILTER','해당 챌린지의 주차를 선택해 주세요.');
@@ -66,7 +68,7 @@ export function teacherRouter(db) {
   router.get('/students',async(req,res)=>{const challenge=req.query.challengeId?await teacherChallenge(db,req):await resolveCurrentChallenge(db,req.user);res.json({students:(await filteredStudents(db,req.query,challenge,{records:false})).students.map(userDto)});});
   router.post('/students',async(req,res)=>{
     const fields=studentFields(req.body || {});const password=temporaryPassword();
-    const user=await db.user.create({data:{...fields,role:'student',passwordHash:await hashPassword(password),mustChangePassword:true}}).catch(error=>duplicateNumber(error,fields.studentNumber));
+    const user=await db.user.create({data:{...fields,role:'student',...await temporaryCredential(password)}}).catch(error=>duplicateNumber(error,fields.studentNumber));
     res.status(201).json({user:userDto(user),temporaryPassword:password});
   });
   const getStudent=async(id,options={})=>{
@@ -74,8 +76,8 @@ export function teacherRouter(db) {
   };
   router.get('/students/:id',async(req,res)=>{
     const challenge=await teacherChallenge(db,req);
-    const user=await getStudent(req.params.id,{include:{memberships:{where:{challengeId:challenge.id}},records:{where:{challengeId:challenge.id},...recordsWithAttachments,include:{attachments:true,revisions:{orderBy:{createdAt:'desc'}},corrections:{where:{status:'approved'}}}},requestedCorrections:{where:{record:{challengeId:challenge.id}},include:correctionInclude,orderBy:{createdAt:'desc'}}}});
-    res.json({challenge:challengeDto(challenge,undefined,{detail:false}),user:userDto({...user,participating:user.memberships.some(member=>member.status==='active')}),records:user.records.map(record=>({...recordDto(record),revisions:record.revisions})),summary:summarizeProgram(challenge.weeks,user.records),corrections:user.requestedCorrections.map(correctionDto)});
+    const user=await getStudent(req.params.id,{include:{memberships:{where:{challengeId:challenge.id}},records:{where:{challengeId:challenge.id},...recordsWithAttachments,include:{attachments:true,revisions:{orderBy:{createdAt:'desc'}},corrections:{where:{status:'approved'}}}},requestedCorrections:{where:{record:{challengeId:challenge.id}},include:correctionInclude,orderBy:{createdAt:'desc'}},fitnessAssessments:{select:{year:true,semester:true,grade:true,score:true},orderBy:[{year:'desc'},{semester:'desc'}]}}});
+    res.json({challenge:challengeDto(challenge,undefined,{detail:false}),user:userDto({...user,participating:user.memberships.some(member=>member.status==='active')}),records:user.records.map(record=>({...recordDto(record),revisions:record.revisions})),summary:summarizeProgram(challenge.weeks,user.records),corrections:user.requestedCorrections.map(correctionDto),fitnessHistory:user.fitnessAssessments});
   });
   router.patch('/students/:id',async(req,res)=>{
     await getStudent(req.params.id);const fields=studentFields(req.body || {},true);
@@ -83,9 +85,9 @@ export function teacherRouter(db) {
     res.json({user:userDto(await db.user.update({where:{id:req.params.id},data:fields}).catch(error=>duplicateNumber(error,fields.studentNumber)))});
   });
   router.delete('/students/:id',async(req,res)=>{
-    const student=await getStudent(req.params.id,{select:{id:true,_count:{select:{records:true,sourceRows:true}}}});
+    const student=await getStudent(req.params.id,{select:{id:true,_count:{select:{records:true,sourceRows:true,fitnessAssessments:true}}}});
     if(student._count.records) fail(409,'HAS_RECORDS','운동 기록이 있는 학생은 삭제할 수 없습니다. 기록 보존을 위해 명단 정보를 수정해 주세요.');
-    if(student._count.sourceRows) fail(409,'HAS_SOURCE_DATA','가져온 원본 자료가 있는 학생은 삭제할 수 없습니다. 자료 보존을 위해 명단 정보를 수정해 주세요.');
+    if(student._count.sourceRows||student._count.fitnessAssessments) fail(409,'HAS_SOURCE_DATA','가져온 원본 자료가 있는 학생은 삭제할 수 없습니다. 자료 보존을 위해 명단 정보를 수정해 주세요.');
     try {await db.user.delete({where:{id:req.params.id}});}
     catch(error) {
       // Evidence may be inserted after the pre-check; the foreign key remains authoritative.
@@ -94,10 +96,21 @@ export function teacherRouter(db) {
     }
     res.json({ok:true});
   });
+  router.get('/students/:id/password-status',async(req,res)=>res.json(passwordStatus(await getStudent(req.params.id))));
+  router.get('/students/:id/temporary-password',async(req,res)=>{
+    const password=await db.$transaction(async tx=>{
+      // Serialize reveal with password change/reset without changing the account.
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${req.params.id} FOR UPDATE`;
+      const user=await tx.user.findFirst({where:{id:req.params.id,role:'student'}});
+      if(!user) fail(404,'NOT_FOUND','학생을 찾을 수 없어요.');
+      return revealTemporaryPassword(user);
+    });
+    res.json({temporaryPassword:password});
+  });
   router.post('/students/:id/reset-password',async(req,res)=>{
-    await getStudent(req.params.id);const password=temporaryPassword();const passwordHash=await hashPassword(password);
+    await getStudent(req.params.id);const password=temporaryPassword();const credential=await temporaryCredential(password);
     await db.$transaction(async tx=>{
-      await tx.user.update({where:{id:req.params.id},data:{passwordHash,mustChangePassword:true}});
+      await tx.user.update({where:{id:req.params.id},data:credential});
       await tx.session.deleteMany({where:{userId:req.params.id}});
     });
     res.json({temporaryPassword:password});

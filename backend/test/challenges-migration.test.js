@@ -30,7 +30,7 @@ test('challenge migration backfills existing data exactly and enforces challenge
       });
       for (const folder of oldMigrations) await executeMigration(folder);
       db = new PrismaClient({ datasourceUrl: url.toString() });
-      const teacher = await db.user.create({ data: { role: 'teacher', studentNumber: 'TEST-TEACHER', name: '테스트 교사', passwordHash: 'TEST-ONLY-UNUSABLE-HASH' } });
+      const teacher = await db.user.create({ data: { role: 'teacher', studentNumber: 'TEST-TEACHER', name: '테스트 교사', passwordHash: 'TEST-ONLY-UNUSABLE-HASH' }, select: { id: true } });
       // The current Prisma schema no longer has User.participating; raw inserts reproduce the old accounts.
       const insertUser = async ({ role, studentNumber, name, grade = null, classNumber = null, targetType = null, participating = false, passwordHash }) => {
         const id = randomUUID();
@@ -131,7 +131,7 @@ test('challenge migration backfills existing data exactly and enforces challenge
           WHERE table_schema = current_schema() AND table_name = 'User' AND column_name = 'participating'`;
         assert.equal(count, 0);
         assert.deepEqual(await db.challengeMembership.findMany({ where: { challengeId: LEGACY_CHALLENGE_ID }, orderBy: { userId: 'asc' } }), memberships);
-        assert.equal((await db.user.findUnique({ where: { id: optional.id } })).studentNumber, 'TEST-OPTIONAL');
+        assert.equal((await db.user.findUnique({ where: { id: optional.id }, select: { studentNumber: true } })).studentNumber, 'TEST-OPTIONAL');
       });
     } finally {
       if (db) await db.$disconnect();

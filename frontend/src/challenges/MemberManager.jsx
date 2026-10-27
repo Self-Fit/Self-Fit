@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { ErrorNotice, EmptyState, Icon, Loading, Modal, navigate } from '../shared.jsx';
 import { addMembers, getChallenge, listMembers, listStudents, removeMember } from './index.js';
 import { ChallengeTabs, MockNotice, PhaseChip, periodText, useAction, useFeedback, useLoad } from './ui.jsx';
-import { MemberStats, ModeChip, SKIP_REASONS, StatusChip, TARGET_LABELS, enrollmentWindow, time } from './members.jsx';
+import { MemberStats, ModeChip, SKIP_REASONS, StatusChip, enrollmentWindow, time } from './members.jsx';
 import AddMembersDialog from './AddMembersDialog.jsx';
+import { FITNESS_GRADES } from '../fitness-grades.js';
+import { FitnessGradeChip } from '../fitness-grades.jsx';
 
 const STATUS_FILTERS = [['', '전체'], ['active', '참여 확정'], ['pending', '수락 대기'], ['declined', '거절'], ['removed', '제외됨']];
-const blankFilters = { status: '', mode: '', grade: '', classNumber: '', search: '' };
+const blankFilters = { status: '', mode: '', grade: '', classNumber: '', fitnessGrade: '', search: '' };
 
 function RemoveDialog({ member, challengeId, onClose, onRemoved }) {
   const [error, setError] = useState(null);
@@ -75,15 +77,16 @@ export default function MemberManager({ mode, id }) {
       <label className="search"><Icon name="search" size={18} /><input aria-label="이름 또는 학번 검색" placeholder="이름 또는 학번 검색" value={filters.search} onChange={event => set('search', event.target.value)} /></label>
       <div className="ch-select ch-filter-select"><select aria-label="학년" value={filters.grade} onChange={event => set('grade', event.target.value)}><option value="">전 학년</option>{grades.map(grade => <option key={grade} value={grade}>{grade}학년</option>)}</select><Icon name="chevron" size={16} /></div>
       <div className="ch-select ch-filter-select"><select aria-label="반" value={filters.classNumber} onChange={event => set('classNumber', event.target.value)}><option value="">전체 반</option>{classes.map(number => <option key={number} value={number}>{number}반</option>)}</select><Icon name="chevron" size={16} /></div>
+      <div className="ch-select ch-filter-select"><select aria-label="체력등급" value={filters.fitnessGrade} onChange={event => set('fitnessGrade', event.target.value)}><option value="">체력등급 전체</option>{FITNESS_GRADES.map(grade => <option key={grade} value={grade}>{grade}등급</option>)}<option value="unmeasured">미등록</option></select><Icon name="chevron" size={16} /></div>
       <div className="seg" role="group" aria-label="참여 방식">{[['', '전체'], ['forced', '강제'], ['invited', '초대']].map(([value, label]) => <button type="button" key={value} className={filters.mode === value ? 'on' : ''} aria-pressed={filters.mode === value} onClick={() => set('mode', value)}>{label}</button>)}</div>
     </div>
     <div className="pills mt12" role="group" aria-label="참여 상태">{STATUS_FILTERS.map(([value, label]) => <button type="button" key={value} className={filters.status === value ? 'on' : ''} aria-pressed={filters.status === value} onClick={() => set('status', value)}>{label}</button>)}</div>
     {membersResult.loading && !membersResult.data ? <Loading /> : membersResult.error ? <div className="mt16"><ErrorNotice error={membersResult.error} retry={membersResult.refresh} /></div>
       : !members.length ? <div className="card mt16"><EmptyState title={Object.keys(query).length ? '조건에 맞는 참여자가 없어요.' : '아직 참여자가 없어요.'} action={!Object.keys(query).length && (enrollment.invite || enrollment.force) ? <button type="button" className="btn primary mt16" onClick={() => setAdding(true)}><Icon name="plus" size={18} />학생 추가</button> : null}>{Object.keys(query).length ? '검색어나 필터를 바꿔 보세요.' : enrollment.reason || '학년·반 조건이나 명단에서 학생을 골라 등록하거나 초대하세요.'}</EmptyState></div>
-        : <div className="tbl-wrap mt12 table-scroll"><table className="tbl"><thead><tr><th>이름</th><th>학번</th><th>학년 · 반</th><th>구분</th><th>방식</th><th>상태</th><th>초대일</th><th>응답일</th><th className="r">관리</th></tr></thead><tbody>
+        : <div className="tbl-wrap mt12 table-scroll"><table className="tbl"><thead><tr><th>이름</th><th>학번</th><th>학년 · 반</th><th>체력등급</th><th>방식</th><th>상태</th><th>초대일</th><th>응답일</th><th className="r">관리</th></tr></thead><tbody>
           {members.map(member => <tr key={member.id}>
             <td className="who"><b>{member.user.name}</b></td><td className="num-font">{member.user.studentNumber}</td><td>{member.user.grade}학년 {member.user.classNumber}반</td>
-            <td><span className={`chip ${member.user.targetType === 'required' ? 'g' : ''}`}>{TARGET_LABELS[member.user.targetType] || '—'}</span></td>
+            <td><FitnessGradeChip student={member.user} /></td>
             <td><ModeChip mode={member.mode} /></td><td><StatusChip status={member.status} /></td>
             <td className="muted fs13">{time(member.invitedAt)}</td><td className="muted fs13">{time(member.respondedAt)}</td>
             <td className="r"><div className="row gap4 ch-row-actions">{actions(member)}</div></td>

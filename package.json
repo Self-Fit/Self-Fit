@@ -12,6 +12,6 @@
     "db:status": "node scripts/db.mjs status",
     "build": "npm run build --workspace frontend",
     "test": "npm run test --workspace backend && npm run test --workspace frontend",
-    "setup": "node scripts/db.mjs start && npm run db:generate --workspace backend && npm run db:deploy --workspace backend"
+    "setup": "node scripts/db.mjs start && node scripts/setup-password-vault.mjs && npm run db:generate --workspace backend && npm run db:deploy --workspace backend"
   }
 }

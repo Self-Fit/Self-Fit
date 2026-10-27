@@ -13,6 +13,12 @@ model User {
   grade              Int?
   classNumber        Int?
   targetType         String?
+  fitnessGrade       Int?
+  fitnessGradeYear   Int?
+  fitnessGradeSemester Int?
+  temporaryPasswordCiphertext String?
+  temporaryPasswordIssuedAt DateTime?
+  passwordChangedAt DateTime?
   passwordHash       String
   mustChangePassword Boolean @default(true)
   weekendReminder    Boolean @default(false)
@@ -27,10 +33,12 @@ model User {
   decidedCorrections Correction[] @relation("decider")
   imports            RosterImport[]
   sourceRows         StudentSource[]
+  fitnessAssessments StudentFitnessAssessment[]
   createdChallenges  Challenge[] @relation("challengeCreator")
   memberships        ChallengeMembership[] @relation("challengeMember")
   invitedMemberships ChallengeMembership[] @relation("challengeInviter")
   @@index([role, grade, classNumber])
+  @@index([role, fitnessGrade, grade, classNumber])
 }
 model Session {
   id        String @id
@@ -72,6 +80,24 @@ model SourceDataset {
   importedAt   DateTime @default(now())
   sourceRows   StudentSource[]
   records      DailyRecord[]
+  fitnessAssessments StudentFitnessAssessment[]
+}
+model StudentFitnessAssessment {
+  id              String @id @default(uuid())
+  userId          String
+  user            User @relation(fields:[userId], references:[id], onDelete:Restrict)
+  year            Int
+  semester        Int
+  grade           Int
+  score           Float?
+  sourceDatasetId String
+  sourceDataset   SourceDataset @relation(fields:[sourceDatasetId], references:[id], onDelete:Restrict)
+  sourceSheet     String
+  sourceRow       Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@unique([userId, year, semester])
+  @@index([sourceDatasetId])
 }
 model StudentSource {
   id           String @id @default(uuid())

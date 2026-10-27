@@ -1,3 +1,4 @@
+import { initializePasswordVault } from './password-vault-key.js';
 import { PrismaClient } from '@prisma/client';
 import { createApp } from './app.js';
 import { configurePush,startScheduler } from './notifications.js';
@@ -6,6 +7,7 @@ const db=new PrismaClient();
 let server;let stopScheduler;
 try {
   await db.$connect();
+  await initializePasswordVault();
   configurePush();
   const app=await createApp(db);
   server=app.listen(Number(process.env.PORT || 4000),process.env.HOST || '127.0.0.1',()=>console.log(`Self Fit API ready on port ${process.env.PORT || 4000}`));

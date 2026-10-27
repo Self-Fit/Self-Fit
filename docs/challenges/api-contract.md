@@ -5,6 +5,12 @@ Base `/api`. 인증·오류·날짜 규칙은 [backend/API.md](../../backend/API
 
 ## 공통 타입
 
+체력등급은 학년(`grade`)과 별개다. `User`에는 `fitnessGrade: null|1|2|3|4|5`, `fitnessGradeYear: null|number`, `fitnessGradeSemester: null|2`가 추가된다. 이 값은 확인된 자료 중 가장 최근 학년도의 **2학기 등급**이며, 자료가 없으면 세 필드 모두 `null`이다. 등급으로 기존 `targetType` 또는 챌린지 참여 상태를 재분류하지 않는다.
+
+교사 학생 상세 `GET /teacher/students/:id`는 `fitnessHistory: [{year,semester,grade,score}]`를 추가한다. 학년도·학기 내림차순이며 `semester`는 1 또는 2, `grade`는 1~5, `score`는 숫자 또는 `null`이다. 같은 학년도·학기는 한 항목만 반환하며, 원본 파일의 재적재는 새 학기로 취급하지 않는다.
+
+명단 `GET /teacher/students`·기존 교사 명단 내보내기는 `fitnessGrade=1|2|3|4|5|unmeasured` 필터를 받는다. `unmeasured`는 현재 등급이 없는 학생, 생략은 전체다. 학년·반·검색 조건과 함께 적용한다.
+
 ```
 ChallengeSummary = {
   id, title, description, year,
@@ -60,14 +66,15 @@ MembershipSelf = { mode, status, invitedAt, respondedAt }
 | `POST /teacher/challenges/:id/publish` | `{}` | `{challenge}` lifecycle=published | `400 INVALID_CHALLENGE`, `409 ALREADY_PUBLISHED` |
 | `POST /teacher/challenges/:id/archive` | `{}` | `{challenge}` | `409 CHALLENGE_NOT_PUBLISHED` |
 | `DELETE /teacher/challenges/:id` | | `{ok:true}` | `409 CHALLENGE_NOT_DRAFT` |
-| `GET /teacher/challenges/:id/members?status=&mode=&grade=&classNumber=&targetType=&search=` | 필터는 모두 선택. `status` 기본 `active,pending,declined`(removed 제외) | `{members:[Membership], stats:{active,pending,declined,removed,forced,invited}}` | |
-| `POST /teacher/challenges/:id/members/preview` | `{studentIds?:[id], filters?:{grade?,classNumber?,targetType?}}` 둘 중 하나 | `{students:[User & {membership:null\|MembershipSelf}]}` 아무것도 쓰지 않음 | `400 INVALID_SELECTION` |
+| `GET /teacher/challenges/:id/members?status=&mode=&grade=&classNumber=&targetType=&fitnessGrade=&search=` | 필터는 모두 선택. `fitnessGrade`는 명단과 같은 규칙. `status` 기본 `active,pending,declined`(removed 제외) | `{members:[Membership], stats:{active,pending,declined,removed,forced,invited}}` | |
+| `POST /teacher/challenges/:id/members/preview` | `{studentIds?:[id], filters?:{grade?,classNumber?,targetType?,fitnessGrades?:[1,2,3,4,5]}}` 둘 중 하나 | `{students:[User & {membership:null\|MembershipSelf}]}` 아무것도 쓰지 않음 | `400 INVALID_SELECTION` |
 | `POST /teacher/challenges/:id/members` | `{mode:'forced'\|'invited', studentIds?:[id], filters?:{…}}` | `201 {added:[Membership], skipped:[{userId,studentNumber,name,reason}]}` | `409 CHALLENGE_NOT_PUBLISHED`, `409 ENROLLMENT_CLOSED`(초대인데 마감 지남 / 강제인데 endDate 지남) |
 | `DELETE /teacher/challenges/:id/members/:userId` | | `{ok:true}` status=removed | `404 NOT_MEMBER`, `409 HAS_RECORDS` |
 
-`GET …/members`의 `stats`는 `grade`·`classNumber`·`targetType`·`search`로 고른 명단 범위의 모든 참여 상태를 집계한다. `status`·`mode`는 `members` 목록만 좁히며 통계에는 적용하지 않는다. `removed`는 별도 상태 수로 표시하고 `forced`·`invited` 합계에서는 제외한다.
+`GET …/members`의 `stats`는 `grade`·`classNumber`·`targetType`·`fitnessGrade`·`search`로 고른 명단 범위의 모든 참여 상태를 집계한다. `status`·`mode`는 `members` 목록만 좁히며 통계에는 적용하지 않는다. `removed`는 별도 상태 수로 표시하고 `forced`·`invited` 합계에서는 제외한다.
 
 `POST …/members` 규칙(학생 1명 단위, 전체는 한 트랜잭션):
+- `fitnessGrades`는 비어 있지 않은 1~5 정수 배열이며 중복 값은 하나로 처리한다. 선택한 등급 중 하나에 속하는 명단 전체를 고른다(등급 간 OR, 학년·반 조건과 AND). 생략은 등급 제한 없음이며, 지정했을 때 등급 미등록 학생은 제외한다. 조회·미리보기와 등록에서 같은 선택 규칙을 적용하며, 미리보기는 참여 상태를 바꾸지 않는다. 실제 등록은 기존 확정 버튼으로 실행한다.
 - 참여 없음 → 생성. `forced`면 `active`, `invited`면 `pending`.
 - `pending` + `forced` 요청 → mode=forced, status=active (강제 전환). `pending` + `invited` → `skipped: already_pending`.
 - `declined` + `invited` → `pending`으로 재초대(invitedAt 갱신). `declined` + `forced` → forced/active.
@@ -143,3 +150,15 @@ MembershipSelf = { mode, status, invitedAt, respondedAt }
 
 ### 덤벨 기록 값
 주차의 `exercises[].id`를 키로 하는 객체. `{ "CURL": 2, "SQUAT": 2, "ROW": null }`처럼 **정확히 그 키들만**, 미입력은 `null`. 레거시 챌린지는 `D12_CURL`/`D12_SQUAT`/`D12_ROW`를 그대로 쓴다.
+
+## 교사 학생 비밀번호 관리
+
+- 기존 User.mustChangePassword가 true이면 학생 비밀번호 변경 필요, false이면 변경 완료입니다.
+- GET /teacher/students/:id/password-status → {changed:boolean, changedAt:ISO|null, issuedAt:ISO|null, temporaryPasswordAvailable:boolean}. 교사 전용이며 비밀번호 원문은 포함하지 않습니다. 기존 변경 시각을 추정하지 않습니다.
+- GET /teacher/students/:id/temporary-password → {temporaryPassword:string}. 교사만 현재 유효한 초기/임시 비밀번호를 명시적으로 조회합니다. 학생이 변경했거나 보존본이 없으면 409 TEMPORARY_PASSWORD_UNAVAILABLE입니다. 모든 응답은 Cache-Control: no-store입니다.
+- POST /teacher/students/:id/reset-password는 기존 {temporaryPassword} 계약을 유지합니다. 새 임시 비밀번호를 암호화해 보관하고 모든 기존 학생 세션을 종료하며 변경 필요 상태로 만듭니다.
+- 학생 개별 생성·엑셀 등록도 임시 비밀번호를 암호화해 보관합니다. 학생 비밀번호 변경 시 보관본을 제거합니다. 학생이 직접 정한 비밀번호는 조회할 수 없습니다.
+- 서버 TEMPORARY_PASSWORD_KEY는 32바이트 키의 64자리 hex 값입니다. DB와 분리해 보관합니다. 키가 없거나 잘못되면 발급/조회는 503 PASSWORD_VAULT_UNAVAILABLE이며 DB를 변경하지 않습니다. 잘못된 키로 기존 보관본을 읽으려 해도 동일 오류입니다.
+- 기존 계정은 현재 해시와 일치하는 초기 비밀번호의 비공개 원본이 있을 때만 보완합니다. 비밀번호 변경·계정 초기화는 보완 작업에서 하지 않습니다.
+
+서버 시작 시 환경 키가 없으면 `TEMPORARY_PASSWORD_KEY_FILE` 또는 비공개 `STORAGE_DIR/.secrets/temporary-password.key`에 키를 최초 1회 생성하고 재사용합니다. 운영 서버의 기존 영속 저장소·systemd 쓰기 권한과 호환됩니다. 원본 키 파일은 DB와 별도로 비공개 백업합니다.

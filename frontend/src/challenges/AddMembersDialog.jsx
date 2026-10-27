@@ -1,11 +1,14 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorNotice, Icon, Loading, Modal } from '../shared.jsx';
 import { addMembers, listStudents, previewMembers } from './index.js';
 import { useAction, useLoad } from './ui.jsx';
-import { SKIP_REASONS, STATUS, TARGET_LABELS, enrollmentWindow } from './members.jsx';
+import { SKIP_REASONS, STATUS, enrollmentWindow } from './members.jsx';
+import { FITNESS_GRADES } from '../fitness-grades.js';
+import { FitnessGradeChip } from '../fitness-grades.jsx';
+import { buildMemberSelection, createSelectionPreview } from './member-selection.js';
 
 const STEPS = ['대상 선택', '참여 방식', '결과'];
-const blankFilters = { grade: '', classNumber: '', targetType: '' };
+const blankFilters = { grade: '', classNumber: '', fitnessGrades: [] };
 const busyStatus = status => status === 'active' || status === 'pending';
 
 function Steps({ step }) {
@@ -25,6 +28,9 @@ export default function AddMembersDialog({ challenge, onClose, onDone }) {
   const [picked, setPicked] = useState([]);
   const [search, setSearch] = useState('');
   const [preview, setPreview] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const previewRequests = useRef(null);
+  if (!previewRequests.current) previewRequests.current = createSelectionPreview();
   const [mode, setMode] = useState(enrollment.invite ? 'invited' : 'forced');
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -35,22 +41,44 @@ export default function AddMembersDialog({ challenge, onClose, onDone }) {
   const classes = [...new Set(students.filter(student => !filters.grade || String(student.grade) === filters.grade).map(student => student.classNumber))].sort((a, b) => a - b);
   const visible = useMemo(() => students.filter(student => !search.trim() || student.name.includes(search.trim()) || student.studentNumber.includes(search.trim())), [students, search]);
 
-  // The request body for both preview and add: exactly one of studentIds / filters (INVALID_SELECTION otherwise).
-  const selection = by === 'ids' ? { studentIds: picked } : { filters: Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== '').map(([key, value]) => [key, key === 'targetType' ? value : Number(value)])) };
-  const switchBy = next => { setBy(next); setFilters(blankFilters); setPicked([]); setSearch(''); setPreview(null); setError(null); };
-  const changeFilter = (key, value) => { setFilters(old => ({ ...old, [key]: value, ...(key === 'grade' ? { classNumber: '' } : {}) })); setPreview(null); };
-  const toggle = id => { setPicked(old => old.includes(id) ? old.filter(item => item !== id) : [...old, id]); setPreview(null); };
+  // Preview and confirmation share the same selector, with each response tied to its exact selection.
+  const selection = useMemo(() => buildMemberSelection(by, filters, picked), [by, filters, picked]);
+  const selectionKey = JSON.stringify([challenge.id, selection]);
+  const invalidatePreview = () => { previewRequests.current.invalidate(); setPreview(null); setPreviewLoading(false); setError(null); };
+  const switchBy = next => { if (next === by) return; invalidatePreview(); setBy(next); setFilters(blankFilters); setPicked([]); setSearch(''); };
+  const changeFilter = (key, value) => { invalidatePreview(); setFilters(old => ({ ...old, [key]: value, ...(key === 'grade' ? { classNumber: '' } : {}) })); };
+  const toggleGrade = grade => { invalidatePreview(); setFilters(old => ({ ...old, fitnessGrades: old.fitnessGrades.includes(grade) ? old.fitnessGrades.filter(value => value !== grade) : [...old.fitnessGrades, grade] })); };
+  const toggle = id => { invalidatePreview(); setPicked(old => old.includes(id) ? old.filter(item => item !== id) : [...old, id]); };
 
-  const previewed = preview?.students || [];
+  const runPreview = useCallback(async () => {
+    setError(null); setPreview(null); setPreviewLoading(true);
+    const outcome = await previewRequests.current.load(selectionKey, () => previewMembers(challenge.id, selection));
+    if (!outcome) return;
+    setPreviewLoading(false);
+    if (outcome.error) setError(outcome.error);
+    else setPreview(outcome);
+  }, [challenge.id, selection, selectionKey]);
+  useEffect(() => {
+    // Filter selection automatically includes everyone matching the chosen grade(s).
+    if (by === 'filters') runPreview();
+    return () => { previewRequests.current.invalidate(); };
+  }, [by, runPreview]);
+
+  const previewReady = preview?.key === selectionKey && !previewLoading;
+  const previewed = previewReady ? preview.data.students : [];
   const fresh = previewed.filter(student => !busyStatus(student.membership?.status));
   const pending = previewed.filter(student => student.membership?.status === 'pending');
   const willChange = mode === 'forced' ? fresh.length + pending.length : fresh.length;
 
-  async function runPreview() { setError(null); const data = await run(() => previewMembers(challenge.id, selection)); if (data) setPreview(data); }
-  async function submit() { setError(null); const data = await run(() => addMembers(challenge.id, { mode, ...selection })); if (data) { setResult(data); setStep(3); onDone?.(); } }
+  async function submit() {
+    if (!previewReady || !willChange) return;
+    setError(null);
+    const data = await run(() => addMembers(challenge.id, { mode, ...selection }));
+    if (data) { setResult(data); setStep(3); onDone?.(); }
+  }
 
-  const footer = step === 1 ? <><button type="button" className="btn secondary" onClick={onClose}>취소</button><button type="button" className="btn primary" disabled={!previewed.length || busy} onClick={() => setStep(2)}>다음: 참여 방식</button></>
-    : step === 2 ? <><button type="button" className="btn secondary" disabled={busy} onClick={() => setStep(1)}>이전</button><button type="button" className="btn primary" disabled={busy || !willChange || (mode === 'invited' ? !enrollment.invite : !enrollment.force)} onClick={submit}>{busy ? '처리 중…' : mode === 'invited' ? `${willChange}명 초대하기` : `${willChange}명 등록하기`}</button></>
+  const footer = step === 1 ? <><button type="button" className="btn secondary" onClick={onClose}>취소</button><button type="button" className="btn primary" disabled={!previewReady || !previewed.length || busy} onClick={() => { if (previewReady && previewed.length) setStep(2); }}>다음: 참여 방식</button></>
+    : step === 2 ? <><button type="button" className="btn secondary" disabled={busy} onClick={() => setStep(1)}>이전</button><button type="button" className="btn primary" disabled={busy || !previewReady || !willChange || (mode === 'invited' ? !enrollment.invite : !enrollment.force)} onClick={submit}>{busy ? '처리 중…' : mode === 'invited' ? `${willChange}명 초대하기` : `${willChange}명 등록하기`}</button></>
       : <button type="button" className="btn primary" onClick={onClose}>닫기</button>;
 
   const grouped = result ? Object.entries(result.skipped.reduce((groups, item) => ({ ...groups, [item.reason]: [...(groups[item.reason] || []), item] }), {})) : [];
@@ -63,25 +91,27 @@ export default function AddMembersDialog({ challenge, onClose, onDone }) {
       </div>
       <p className="help">두 방법 중 하나만 쓸 수 있어요. 바꾸면 고른 내용이 초기화돼요.</p>
       {roster.loading ? <Loading /> : roster.error ? <ErrorNotice error={roster.error} retry={roster.refresh} /> : by === 'filters'
-        ? <div className="ch-filter-grid">
+        ? <div className="ch-filter-grid ch-grade-filter-grid">
           <Select label="학년" value={filters.grade} onChange={value => changeFilter('grade', value)} options={[['', '전 학년'], ...grades.map(grade => [String(grade), `${grade}학년`])]} />
           <Select label="반" value={filters.classNumber} onChange={value => changeFilter('classNumber', value)} options={[['', '전체 반'], ...classes.map(number => [String(number), `${number}반`])]} />
-          <Select label="대상 구분" value={filters.targetType} onChange={value => changeFilter('targetType', value)} options={[['', '전체'], ['required', '필수'], ['optional', '선택']]} />
+          <div className="ch-grade-field"><div className="fw7 fs13">체력등급 <span className="muted fw6">· 여러 등급을 고를 수 있어요</span></div><div className="pills mt8" role="group" aria-label="체력등급 선택"><button type="button" className={!filters.fitnessGrades.length ? 'on' : ''} aria-pressed={!filters.fitnessGrades.length} onClick={() => changeFilter('fitnessGrades', [])}>전체</button>{FITNESS_GRADES.map(grade => <button type="button" key={grade} className={filters.fitnessGrades.includes(grade) ? 'on' : ''} aria-pressed={filters.fitnessGrades.includes(grade)} onClick={() => toggleGrade(grade)}>{grade}등급</button>)}</div><p className="help mt8">고른 등급의 학생을 모두 선택해요. 등급을 고르면 미등록 학생은 제외해요.</p></div>
         </div>
         : <div className="stack gap8">
           <label className="search ch-search"><Icon name="search" size={18} /><input aria-label="이름 또는 학번 검색" placeholder="이름 또는 학번" value={search} onChange={event => setSearch(event.target.value)} /></label>
           <div className="ch-pick-list" role="group" aria-label="학생 명단">{visible.map(student => <button type="button" key={student.id} className={`ch-pick ${picked.includes(student.id) ? 'on' : ''}`} aria-pressed={picked.includes(student.id)} onClick={() => toggle(student.id)}>
             <span className={`cbx ${picked.includes(student.id) ? 'on' : ''}`} aria-hidden="true">{picked.includes(student.id) && <Icon name="check" />}</span>
-            <b>{student.name}</b><span className="muted num-font">{student.studentNumber}</span><span className="muted">{student.grade}학년 {student.classNumber}반</span><span className="chip">{TARGET_LABELS[student.targetType] || '—'}</span>
+            <b>{student.name}</b><span className="muted num-font">{student.studentNumber}</span><span className="muted">{student.grade}학년 {student.classNumber}반</span><FitnessGradeChip student={student} />
           </button>)}{!visible.length && <p className="fs13 muted ch-pad">검색 결과가 없어요.</p>}</div>
           <p className="fs13 t2">{picked.length}명 선택됨</p>
         </div>}
-      <button type="button" className="btn soft" disabled={busy || (by === 'ids' && !picked.length)} onClick={runPreview}><Icon name="search" size={16} />{busy ? '확인 중…' : '미리보기'}</button>
-      {preview && <div className="stack gap8">
+      {by === 'ids' && <button type="button" className="btn soft" disabled={busy || previewLoading || !picked.length} onClick={runPreview}><Icon name="search" size={16} />{previewLoading ? '확인 중…' : '미리보기'}</button>}
+      {previewLoading && <p className="fs13 muted" role="status">대상 학생을 확인하고 있어요…</p>}
+      {previewReady && <div className="stack gap8" aria-live="polite">
+        {by === 'filters' && <p className="fs14 fw7">조건에 맞는 학생 {previewed.length}명 전체 선택됨</p>}
         <p className="fs14"><b>{previewed.length}명</b> 중 <b className="gtext">{fresh.length}명</b>을 새로 추가할 수 있어요.{previewed.length > fresh.length && <span className="muted"> 회색 학생은 이미 참여 중이거나 수락을 기다리고 있어요.</span>}</p>
         <div className="ch-preview-list">{previewed.map(student => <div key={student.id} className={`ch-preview ${busyStatus(student.membership?.status) ? 'is-busy' : ''}`}>
           <b>{student.name}</b><span className="num-font">{student.studentNumber}</span><span>{student.grade}학년 {student.classNumber}반</span>
-          {student.membership ? <span className={`chip ${STATUS[student.membership.status]?.[1] || ''}`}>{STATUS[student.membership.status]?.[0]}</span> : <span className="chip g">새로 추가</span>}
+          <div className="ch-chip-stack"><FitnessGradeChip student={student} />{student.membership ? <span className={`chip ${STATUS[student.membership.status]?.[1] || ''}`}>{STATUS[student.membership.status]?.[0]}</span> : <span className="chip g">새로 추가</span>}</div>
         </div>)}{!previewed.length && <p className="fs13 muted ch-pad">조건에 맞는 학생이 없어요.</p>}</div>
       </div>}
     </div>}
@@ -101,6 +131,6 @@ export default function AddMembersDialog({ challenge, onClose, onDone }) {
       <div className="banner g"><Icon name="check" /><span><b>{result.added.length}명</b>을 {mode === 'invited' ? '초대했어요.' : '등록했어요.'}</span></div>
       {grouped.length > 0 && <div className="stack gap8"><b className="fs14">건너뛴 학생 {result.skipped.length}명</b>{grouped.map(([reason, items]) => <div className="ch-skip" key={reason}><span className="chip">{SKIP_REASONS[reason] || reason}</span><span className="fs13 t2">{items.map(item => item.name ? `${item.name}(${item.studentNumber})` : item.userId).join(', ')}</span></div>)}</div>}
     </div>}
-    {error && <div className="mt12"><ErrorNotice error={error} /></div>}
+    {error && <div className="mt12"><ErrorNotice error={error} retry={step === 1 && by === 'filters' ? runPreview : undefined} /></div>}
   </Modal>;
 }
