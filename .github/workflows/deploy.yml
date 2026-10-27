@@ -43,7 +43,16 @@ jobs:
           node-version: 22
           cache: npm
       - name: 영상 검사 도구 설치
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+        # 영상 길이 회귀 테스트용. 설치가 늦거나 실패하면 그 검사만 건너뛰고 나머지 테스트는 그대로 돈다.
+        timeout-minutes: 5
+        continue-on-error: true
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          # man-db 색인 갱신이 apt 설치를 몇 분씩 멈추게 하므로 끈다.
+          sudo rm -f /var/lib/man-db/auto-update
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends ffmpeg
       - run: npm ci
       - run: npm run db:generate --workspace backend
       - run: npm test
