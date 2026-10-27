@@ -1,3 +1,4 @@
+import {initializePasswordVault} from '../src/password-vault-key.js';
 import fs from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
 import {PrismaClient} from '@prisma/client';
@@ -31,6 +32,7 @@ export async function recoverTemporaryPasswords(db,accounts,{apply=false}={}) {
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  const [file,...args]=process.argv.slice(2);
  if(!file||args.some(arg=>!['--apply','--dry-run'].includes(arg)))throw new Error('Usage: node --env-file=backend/.env backend/scripts/recover-temporary-passwords.js private-accounts.json [--apply]');
+ await initializePasswordVault();
  const db=new PrismaClient();
  try{const source=JSON.parse(await fs.readFile(file,'utf8'));console.log(JSON.stringify(await recoverTemporaryPasswords(db,source.accounts,{apply:args.includes('--apply')})));}
  finally{await db.$disconnect();}
