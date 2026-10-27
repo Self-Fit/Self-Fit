@@ -16,6 +16,9 @@ model User {
   fitnessGrade       Int?
   fitnessGradeYear   Int?
   fitnessGradeSemester Int?
+  temporaryPasswordCiphertext String?
+  temporaryPasswordIssuedAt DateTime?
+  passwordChangedAt DateTime?
   passwordHash       String
   mustChangePassword Boolean @default(true)
   weekendReminder    Boolean @default(false)

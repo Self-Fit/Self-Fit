@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { Prisma } from '@prisma/client';
 import { fail, isForeignKeyViolation, requiredText } from './errors.js';
 import { userDto, studentSummary, recordDto, correctionDto, programDto, recordsWithAttachments } from './dto.js';
-import { hashPassword, temporaryPassword } from './password.js';
+import { temporaryPassword } from './password.js';
+import { temporaryCredential, passwordStatus, revealTemporaryPassword } from './temporary-passwords.js';
 import { studentFields, rosterRouter } from './roster.js';
 import { summarizeProgram, summarizeWeek,getWeekForDate } from './domain/index.js';
 import { checkValue,checkProspectiveTotals } from './student.js';
@@ -67,7 +68,7 @@ export function teacherRouter(db) {
   router.get('/students',async(req,res)=>{const challenge=req.query.challengeId?await teacherChallenge(db,req):await resolveCurrentChallenge(db,req.user);res.json({students:(await filteredStudents(db,req.query,challenge,{records:false})).students.map(userDto)});});
   router.post('/students',async(req,res)=>{
     const fields=studentFields(req.body || {});const password=temporaryPassword();
-    const user=await db.user.create({data:{...fields,role:'student',passwordHash:await hashPassword(password),mustChangePassword:true}}).catch(error=>duplicateNumber(error,fields.studentNumber));
+    const user=await db.user.create({data:{...fields,role:'student',...await temporaryCredential(password)}}).catch(error=>duplicateNumber(error,fields.studentNumber));
     res.status(201).json({user:userDto(user),temporaryPassword:password});
   });
   const getStudent=async(id,options={})=>{
@@ -95,10 +96,21 @@ export function teacherRouter(db) {
     }
     res.json({ok:true});
   });
+  router.get('/students/:id/password-status',async(req,res)=>res.json(passwordStatus(await getStudent(req.params.id))));
+  router.get('/students/:id/temporary-password',async(req,res)=>{
+    const password=await db.$transaction(async tx=>{
+      // Serialize reveal with password change/reset without changing the account.
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${req.params.id} FOR UPDATE`;
+      const user=await tx.user.findFirst({where:{id:req.params.id,role:'student'}});
+      if(!user) fail(404,'NOT_FOUND','학생을 찾을 수 없어요.');
+      return revealTemporaryPassword(user);
+    });
+    res.json({temporaryPassword:password});
+  });
   router.post('/students/:id/reset-password',async(req,res)=>{
-    await getStudent(req.params.id);const password=temporaryPassword();const passwordHash=await hashPassword(password);
+    await getStudent(req.params.id);const password=temporaryPassword();const credential=await temporaryCredential(password);
     await db.$transaction(async tx=>{
-      await tx.user.update({where:{id:req.params.id},data:{passwordHash,mustChangePassword:true}});
+      await tx.user.update({where:{id:req.params.id},data:credential});
       await tx.session.deleteMany({where:{userId:req.params.id}});
     });
     res.json({temporaryPassword:password});

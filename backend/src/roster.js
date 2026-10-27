@@ -3,7 +3,8 @@ import multer from 'multer';
 import { Router } from 'express';
 import { Prisma } from '@prisma/client';
 import { fail, requiredText } from './errors.js';
-import { temporaryPassword, hashPassword } from './password.js';
+import { temporaryPassword } from './password.js';
+import { temporaryCredential } from './temporary-passwords.js';
 import { validateXlsxArchive } from './xlsx-safety.js';
 export function studentFields(input,partial=false) {
   const fields={};
@@ -46,7 +47,7 @@ export function rosterRouter(db) {
     sheet.getColumn(1).numFmt='@';
     sheet.getCell('E2').dataValidation={type:'list',allowBlank:true,formulae:['"필수,선택"']};
     const guide=workbook.addWorksheet('작성 안내');
-    guide.addRows([['항목','안내'],['학번','문자열로 입력합니다. 선행 0을 유지하세요.'],['대상구분','필수 또는 선택'],['주의','첫 시트의 2행부터 실제 학생만 입력하세요. 기존 학번과 중복되면 등록하지 않습니다.'],['비밀번호','등록 완료 시 개인별 임시 비밀번호를 한 번 제공합니다.']]);
+    guide.addRows([['항목','안내'],['학번','문자열로 입력합니다. 선행 0을 유지하세요.'],['대상구분','필수 또는 선택'],['주의','첫 시트의 2행부터 실제 학생만 입력하세요. 기존 학번과 중복되면 등록하지 않습니다.'],['비밀번호','등록 완료 시 임시 비밀번호를 제공하며, 학생이 변경하기 전까지 교사가 다시 확인할 수 있습니다.']]);
     await sendWorkbook(res,workbook,'self-fit-roster-template.xlsx');
   });
   router.post('/validate',upload.single('file'),async(req,res)=>{
@@ -87,7 +88,7 @@ export function rosterRouter(db) {
     const credentials=[];const prepared=[];
     for(const row of item.rows) {
       const password=temporaryPassword();
-      prepared.push({...row,role:'student',passwordHash:await hashPassword(password),mustChangePassword:true});
+      prepared.push({...row,role:'student',...await temporaryCredential(password)});
       credentials.push({studentNumber:row.studentNumber,name:row.name,temporaryPassword:password});
     }
     await db.$transaction(async tx=>{

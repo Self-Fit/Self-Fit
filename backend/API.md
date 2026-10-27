@@ -112,3 +112,15 @@ Before each device send, the server also rechecks subscription identity and owne
 Push registration and owned-status checks set `self_fit_push_device` when needed: a random 32-byte, HttpOnly, SameSite=Lax cookie scoped to `/api`, Secure in production, with a one-year lifetime. Only its SHA-256 hash is stored on the subscription and session; no device identifier is exposed in API JSON. The session copy supports logout before a new cookie response reaches the browser. Logout preserves the device cookie for later account switches; a cookie with no registered subscription has no effect.
 
 Initialize schema `npm run db:deploy`, then run `npm run bootstrap-teacher` in a terminal to enter the one real teacher's ID, name and hidden password. `TEACHER_ID`, `TEACHER_NAME`, and `TEACHER_PASSWORD` env or stdin JSON are also supported. Backend reads `backend/.env`. Never pass passwords on CLI args. No seed users or activity are installed.
+
+## 교사 학생 비밀번호 관리
+
+- 기존 User.mustChangePassword가 true이면 학생 비밀번호 변경 필요, false이면 변경 완료입니다.
+- GET /teacher/students/:id/password-status → {changed:boolean, changedAt:ISO|null, issuedAt:ISO|null, temporaryPasswordAvailable:boolean}. 교사 전용이며 비밀번호 원문은 포함하지 않습니다. 기존 변경 시각을 추정하지 않습니다.
+- GET /teacher/students/:id/temporary-password → {temporaryPassword:string}. 교사만 현재 유효한 초기/임시 비밀번호를 명시적으로 조회합니다. 학생이 변경했거나 보존본이 없으면 409 TEMPORARY_PASSWORD_UNAVAILABLE입니다. 모든 응답은 Cache-Control: no-store입니다.
+- POST /teacher/students/:id/reset-password는 기존 {temporaryPassword} 계약을 유지합니다. 새 임시 비밀번호를 암호화해 보관하고 모든 기존 학생 세션을 종료하며 변경 필요 상태로 만듭니다.
+- 학생 개별 생성·엑셀 등록도 임시 비밀번호를 암호화해 보관합니다. 학생 비밀번호 변경 시 보관본을 제거합니다. 학생이 직접 정한 비밀번호는 조회할 수 없습니다.
+- 서버 TEMPORARY_PASSWORD_KEY는 32바이트 키의 64자리 hex 값입니다. DB와 분리해 보관합니다. 키가 없거나 잘못되면 발급/조회는 503 PASSWORD_VAULT_UNAVAILABLE이며 DB를 변경하지 않습니다. 잘못된 키로 기존 보관본을 읽으려 해도 동일 오류입니다.
+- 기존 계정은 현재 해시와 일치하는 초기 비밀번호의 비공개 원본이 있을 때만 보완합니다. 비밀번호 변경·계정 초기화는 보완 작업에서 하지 않습니다.
+
+서버 시작 시 환경 키가 없으면 `TEMPORARY_PASSWORD_KEY_FILE` 또는 비공개 `STORAGE_DIR/.secrets/temporary-password.key`에 키를 최초 1회 생성하고 재사용합니다. 운영 서버의 기존 영속 저장소·systemd 쓰기 권한과 호환됩니다. 원본 키 파일은 DB와 별도로 비공개 백업합니다.

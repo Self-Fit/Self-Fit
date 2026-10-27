@@ -75,7 +75,7 @@ export function authRouter(db) {
     if (await verifyPassword(req.body.newPassword,req.user.passwordHash)) fail(400,'SAME_PASSWORD','현재 비밀번호와 다른 비밀번호를 사용해 주세요.');
     const passwordHash=await hashPassword(req.body.newPassword);
     const user=await db.$transaction(async tx=>{
-      const updated=await tx.user.updateMany({where:{id:req.user.id,passwordHash:req.user.passwordHash},data:{passwordHash,mustChangePassword:false}});
+      const updated=await tx.user.updateMany({where:{id:req.user.id,passwordHash:req.user.passwordHash},data:{passwordHash,mustChangePassword:false,temporaryPasswordCiphertext:null,passwordChangedAt:new Date()}});
       if(!updated.count) fail(409,'PASSWORD_CHANGED','비밀번호가 변경되었습니다. 다시 로그인해 주세요.');
       await tx.session.deleteMany({where:{userId:req.user.id,id:{not:req.sessionId}}});
       return tx.user.findUnique({where:{id:req.user.id}});

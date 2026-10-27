@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomBytes } from 'node:crypto';
 import { mkdtemp,rm,readFile,readdir } from 'node:fs/promises';
 import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -13,6 +13,7 @@ import { PrismaClient } from '@prisma/client';
 import ExcelJS from 'exceljs';
 import { runMembershipApiCases } from './membership-api-cases.js';
 import { runChallengeApiCases } from './challenge-api-cases.js';
+import { runPasswordApiCases } from './password-api-cases.js';
 import { runFitnessApiCases } from './fitness-api-cases.js';
 import { createApp } from '../src/app.js';
 import { hashPassword } from '../src/password.js';
@@ -21,6 +22,8 @@ const legacyId='challenge-2026-self-fit';
 const run=promisify(execFile);const require=createRequire(import.meta.url);
 const backendDir=fileURLToPath(new URL('../',import.meta.url));
 test('isolated PostgreSQL API integration', {skip:!process.env.TEST_DATABASE_URL,timeout:180000}, async t=>{
+  const previousVaultKey=process.env.TEMPORARY_PASSWORD_KEY;
+  process.env.TEMPORARY_PASSWORD_KEY=randomBytes(32).toString('hex');
   const baseUrl=new URL(process.env.TEST_DATABASE_URL);
   assert.match(baseUrl.pathname,/_test$/,'Integration tests require a dedicated database name ending in _test');
   const schema=`test_${randomUUID().replaceAll('-','')}`;
@@ -226,6 +229,9 @@ test('isolated PostgreSQL API integration', {skip:!process.env.TEST_DATABASE_URL
       const committed=await request('/teacher/roster/commit',{cookie:teacherCookie,method:'POST',body:{importId:preview.data.importId}});assert.equal(committed.status,201);assert.equal(committed.data.created,1);
       assert.equal((await request('/teacher/roster/commit',{cookie:teacherCookie,method:'POST',body:{importId:preview.data.importId}})).status,409);
       const credentials=committed.data.credentials[0];const logged=await login(credentials.studentNumber,credentials.temporaryPassword);
+      const importedStudent=await db.user.findUnique({where:{studentNumber:credentials.studentNumber}});
+      assert(importedStudent.temporaryPasswordCiphertext);
+      assert.equal((await request('/teacher/students/'+importedStudent.id+'/temporary-password',{cookie:teacherCookie})).data.temporaryPassword,credentials.temporaryPassword);
       assert.equal(logged.data.user.mustChangePassword,true);assert.equal((await request('/student/dashboard',{cookie:logged.cookie})).status,403);
       const changed=await request('/auth/change-password',{cookie:logged.cookie,method:'POST',body:{newPassword:'new-integration-password123'}});assert.equal(changed.status,200);
       assert.equal((await request('/student/dashboard',{cookie:logged.cookie})).status,200);
@@ -356,7 +362,9 @@ test('isolated PostgreSQL API integration', {skip:!process.env.TEST_DATABASE_URL
     await runChallengeApiCases(t,{db,request,teacherCookie,a,b,aCookie,bCookie,origin,temp});
     await runMembershipApiCases(t,{db,request,teacherCookie,a,b,aCookie,bCookie,origin,temp});
     await runFitnessApiCases(t,{db,request,teacherCookie,aCookie});
+    await runPasswordApiCases(t,{db,request,login,teacherCookie,aCookie,teacherId:teacher.id});
   } finally {
+    if(previousVaultKey===undefined)delete process.env.TEMPORARY_PASSWORD_KEY;else process.env.TEMPORARY_PASSWORD_KEY=previousVaultKey;
     if(server) await new Promise(resolve=>{server.close(resolve);server.closeAllConnections();});
     const cleanup=[];
     try {await db?.$disconnect();} catch(error) {cleanup.push(error);}
