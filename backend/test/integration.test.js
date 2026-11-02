@@ -1,3 +1,4 @@
+import { prefixedRoster } from './prefixed-roster-fixture.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID, randomBytes } from 'node:crypto';
@@ -237,6 +238,24 @@ test('isolated PostgreSQL API integration', {skip:!process.env.TEST_DATABASE_URL
       assert.equal((await request('/student/dashboard',{cookie:logged.cookie})).status,200);
       assert.equal((await request(`/teacher/students/${logged.data.user.id}/reset-password`,{cookie:teacherCookie,method:'POST',body:{}})).status,200);
       assert.equal((await request('/auth/me',{cookie:logged.cookie})).status,401);
+    });
+    await t.test('prefixed roster imports and rejects duplicate IDs and formulas',async()=>{
+      const upload=async rows=>{const form=new FormData();form.append('file',new Blob([await prefixedRoster(rows)]),'prefixed.xlsx');return request('/teacher/roster/validate',{cookie:teacherCookie,method:'POST',body:form});};
+      const rows=[['test-prefixed','네임스페이스 검증',1,9,'선택']];
+      const preview=await upload(rows);assert.equal(preview.status,200);assert.deepEqual(preview.data.errors,[]);
+      const committed=await request('/teacher/roster/commit',{cookie:teacherCookie,method:'POST',body:{importId:preview.data.importId}});assert.equal(committed.status,201);assert.equal(committed.data.created,1);
+      const duplicate=await upload(rows);assert.equal(duplicate.data.importId,null);assert.match(duplicate.data.errors[0].message,/이미 등록/);
+      const formula=await upload([[{formula:'1+1',result:2},'수식',1,9,'선택']]);assert.equal(formula.data.importId,null);assert.match(formula.data.errors[0].message,/수식/);
+    });
+    await t.test('filtered export excludes nonparticipants but explicit all retains them',async()=>{
+      const route=`/teacher/export?challengeId=${legacyId}&participating=true`;
+      const filtered=await request(route,{cookie:teacherCookie,raw:true});assert.equal(filtered.status,200);
+      const workbook=new ExcelJS.Workbook();await workbook.xlsx.load(filtered.data);
+      const numbers=workbook.getWorksheet('참여자 요약').getColumn(1).values.slice(2);
+      assert(numbers.includes(a.studentNumber));assert(!numbers.includes(b.studentNumber));assert(!numbers.includes('test-prefixed'));
+      const all=await request(`/teacher/export?challengeId=${legacyId}`,{cookie:teacherCookie,raw:true});
+      const allBook=new ExcelJS.Workbook();await allBook.xlsx.load(all.data);
+      assert(allBook.getWorksheet('참여자 요약').getColumn(1).values.includes(b.studentNumber));
     });
     await t.test('XLSX formulas and oversized expanded archives are rejected without importing students',async()=>{
       const workbook=new ExcelJS.Workbook();const sheet=workbook.addWorksheet('명단');sheet.addRow(['학번','이름','학년','반','대상구분']);sheet.addRow([{formula:'1+1',result:2},'TEST FORMULA',1,1,'필수']);

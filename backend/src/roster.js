@@ -6,6 +6,7 @@ import { fail, requiredText } from './errors.js';
 import { temporaryPassword } from './password.js';
 import { temporaryCredential } from './temporary-passwords.js';
 import { validateXlsxArchive } from './xlsx-safety.js';
+import { normalizeSpreadsheetNamespaces } from './xlsx-namespaces.js';
 export function studentFields(input,partial=false) {
   const fields={};
   for(const key of ['studentNumber','name']) {
@@ -54,7 +55,7 @@ export function rosterRouter(db) {
     if(!req.file||!req.file.originalname.toLowerCase().endsWith('.xlsx')) fail(400,'XLSX_REQUIRED','엑셀 .xlsx 명단 파일을 선택해 주세요.');
     validateXlsxArchive(req.file.buffer);
     const workbook=new ExcelJS.Workbook();
-    try {await workbook.xlsx.load(req.file.buffer);} catch {fail(400,'INVALID_XLSX','엑셀 파일을 읽을 수 없습니다. 명단 양식의 .xlsx 파일을 사용해 주세요.');}
+    try {await workbook.xlsx.load(await normalizeSpreadsheetNamespaces(req.file.buffer));} catch {fail(400,'INVALID_XLSX','엑셀 파일을 읽을 수 없습니다. 명단 양식의 .xlsx 파일을 사용해 주세요.');}
     const sheet=workbook.worksheets[0];
     if(!sheet) fail(400,'EMPTY_XLSX','명단 시트가 없습니다.');
     if(sheet.rowCount>20001) fail(400,'ROSTER_TOO_LARGE','한 번에 20,000명 이하로 나누어 등록해 주세요.');

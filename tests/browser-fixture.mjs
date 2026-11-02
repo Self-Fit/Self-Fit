@@ -45,8 +45,8 @@ try {
   // qa-zero is invited to the upcoming one, qa-optional is invited to both (legacy enroll must ask to choose).
   const today=koreanDate(),day=offset=>{const date=new Date(`${today}T00:00:00Z`);date.setUTCDate(date.getUTCDate()+offset);return date.toISOString().slice(0,10);};
   const running=await createChallenge(db,{title:'QA 진행 중 챌린지',description:'오늘이 포함된 검증용 챌린지',startDate:today,enrollmentDeadline:day(3),weeks:[
-    {title:'만보 걷기',startDate:today,endDate:day(6),inputType:'walking',weeklyTarget:5,dailyTarget:null,unit:'일',dailyUnit:'보',color:'#E07A2E',description:'하루 10,000보 이상 5일'},
-    {title:'줄넘기',startDate:day(14),endDate:day(20),inputType:'count',weeklyTarget:1000,dailyTarget:200,unit:'회',dailyUnit:'회',color:'#2F7FD8',description:'하루 200회, 주간 합계 1,000회'},
+    {title:'긴 운동 이름 줄바꿈과 화면 경계 확인용 만보 걷기 챌린지',startDate:today,endDate:day(6),inputType:'walking',weeklyTarget:5,dailyTarget:null,unit:'일',dailyUnit:'보',color:'#E07A2E',description:'하루 10,000보 이상 5일'},
+    {title:'긴 운동 이름 줄바꿈과 화면 경계 확인용 줄넘기 챌린지',startDate:day(14),endDate:day(20),inputType:'count',weeklyTarget:1000,dailyTarget:200,unit:'회',dailyUnit:'회',color:'#2F7FD8',description:'하루 200회, 주간 합계 1,000회'},
   ]},teacher.id);
   const upcoming=await createChallenge(db,{title:'QA 예정 챌린지',description:'아직 시작 전인 검증용 챌린지',startDate:day(30),weeks:[
     {title:'플랭크',startDate:day(30),endDate:day(36),inputType:'check',weeklyTarget:5,dailyTarget:1,unit:'일',dailyUnit:'분',color:'#8A5CD6',description:'1분 이상, 기준을 충족한 5일'},
