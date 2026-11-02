@@ -26,7 +26,7 @@ function valueLabel(week, value) {
   if (week?.deferred) return '세부 기준 확정 대기';
   return `${fmt(value)}${week?.unit || ''}`;
 }
-function Goal({week}) { return <>{week.deferred ? '세부 기준 확정 대기' : isDumbbell(week) ? `${week.exercises.length}종목 각 ${week.exercises[0].repetitions}회 × ${week.exercises[0].targetSets}세트 · 주간 ${week.weeklyTarget}일` : week.inputType === 'walking' ? '하루 10,000보 이상' : week.inputType === 'check' ? week.description : `${week.dailyTarget ? `하루 ${fmt(week.dailyTarget)}${week.dailyUnit || week.unit} · ` : ''}주간 ${fmt(week.weeklyTarget)}${week.unit}`}</>; }
+function Goal({week}) { return <>{week.deferred ? '세부 기준 확정 대기' : isDumbbell(week) ? `${week.exercises.length}종목 각 ${week.exercises[0].repetitions}회 × ${week.exercises[0].targetSets}세트 · 주간 ${week.weeklyTarget}일` : week.inputType === 'walking' ? '하루 10,000보 이상' : week.inputType === 'check' ? (week.description||`주간 ${fmt(week.weeklyTarget)}일 수행`) : `${week.dailyTarget ? `하루 ${fmt(week.dailyTarget)}${week.dailyUnit || week.unit} · ` : ''}주간 ${fmt(week.weeklyTarget)}${week.unit}`}</>; }
 function StateChip({summary}) { return <span className={`chip ${summary?.complete === true ? 'g' : summary?.complete === null ? 'warn' : ''}`}>{summary?.complete === true ? '완료' : summary?.complete === null ? '판정 보류' : '미완료'}</span>; }
 function TargetChip({student}) { return <span className={`chip ${student.targetType === 'required' ? 'g' : student.participating ? 'blue' : ''}`}>{student.targetType === 'required' ? '필수' : '선택'}</span>; }
 function Empty({title='조건에 맞는 학생이 없어요.',children}) { return <div className="empty"><div className="art"><Icon name="search" size={44}/></div><b>{title}</b><p>{children || '검색어나 필터를 바꿔 보세요.'}</p></div>; }
@@ -132,7 +132,7 @@ function Overview({mode}) {
       <FilterBar {...{filters,setFilters,mode}} students={all.data?.students||[]}><div className="grow"/><div className="seg"><button className={!table?'on':''} onClick={()=>setTable(false)}><Icon name="grid" size={16}/>잔디</button><button className={table?'on':''} onClick={()=>setTable(true)}><svg className="i s16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M9 7h11M9 12h11M9 17h11"/><circle cx="4.8" cy="7" r=".9"/><circle cx="4.8" cy="12" r=".9"/><circle cx="4.8" cy="17" r=".9"/></svg>주차 표</button></div></FilterBar>{content}
     </>}
     {all.error&&<ErrorNotice error={all.error} retry={all.refresh}/>} {corrections.error&&<ErrorNotice error={corrections.error} retry={corrections.refresh}/>}
-    {selected&&<RecordDetail selected={selected} onClose={()=>setSelected(null)}/>} {exporting&&<ExportDialog {...{filters,students}} onClose={()=>setExporting(false)}/>}
+    {selected&&<RecordDetail selected={selected} onClose={()=>setSelected(null)}/>} {exporting&&<ExportDialog filters={{...filters,participating:'true'}} students={participants} onClose={()=>setExporting(false)}/>}
     {filterOpen&&<MobileFilters {...{filters,setFilters}} students={all.data?.students||[]} onClose={()=>setFilterOpen(false)}/>}
   </>;
 }

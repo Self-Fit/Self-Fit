@@ -76,3 +76,12 @@ button.node{font-family:inherit}
 .mobile-app .page-content{padding:20px 16px 24px}
 .table-scroll{overflow-x:auto}
 .app-state-note{color:var(--t3);font-size:13px;line-height:1.6}
+
+/* Bound roadmap labels to their side of the path, including staggered nodes. */
+.live-roadmap{container-type:inline-size}
+.live-roadmap .node .cap{width:calc(50cqw - 56px + var(--roadmap-offset,0px));white-space:normal;overflow-wrap:anywhere}
+.live-roadmap .roadmap-title{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.live-roadmap .node .cap em{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.live-roadmap .wk-card .top{gap:12px;align-items:flex-start}
+.live-roadmap .wk-card .top b{min-width:0;overflow-wrap:anywhere}
+.live-roadmap .wk-card .top span{flex-shrink:0}
